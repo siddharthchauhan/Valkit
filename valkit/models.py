@@ -724,6 +724,10 @@ class Risk(Record):
 
 @dataclass
 class TestCase(Record):
+    # Tells pytest not to try to collect this as a test class. The name comes
+    # from the validation domain, where a test case is an IQ/OQ/PQ step.
+    __test__ = False
+
     test_id: str
     phase: QualificationPhase
     title: str
@@ -753,6 +757,8 @@ class Deviation(Record):
 
 @dataclass
 class TestExecution(Record):
+    __test__ = False
+
     test_id: str
     run_id: str
     executed_at: str
