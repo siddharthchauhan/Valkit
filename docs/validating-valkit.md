@@ -108,8 +108,24 @@ Stated because a qualification document that lists only strengths is not one:
   for demonstration and small deployments. A regulated deployment substitutes
   one backed by the customer's directory; the protocol is narrow to make that
   straightforward, but the substitution is the customer's work.
-- The HTTP API's development actor header is not an authentication scheme. It is
-  documented as such in the module, and a real deployment binds SSO there.
+- **The API's `X-ValKit-Actor` header is attribution, not authentication.** It
+  says who a request claims to be for, and the API records exactly that. Nothing
+  in ValKit verifies the claim: a deployment puts an identity provider in front
+  and populates the header from the authenticated session. Served without one,
+  every audit record is only as trustworthy as the network. This is the single
+  most consequential thing to get right when deploying the API, and it is
+  entirely outside the tool.
+  Signing is the exception, and deliberately: a signature is verified against
+  the identity store's components regardless of the header, so a forged header
+  cannot produce a signature. It can misattribute a specification ingestion; it
+  cannot misattribute an approval.
+- **The API keeps its working state in memory.** Specifications, pipelines and
+  rendered documents do not survive a restart, and a document must be signed in
+  the process that generated it. The durable records — the hash-chained trail and
+  the content-addressed evidence — are on disk or in S3 and are unaffected, which
+  is the deliberate part of the design; but a deployment that needs a validation
+  to span a restart or several instances needs the Postgres persistence in
+  `infra/postgres/`, which is specified there and not wired up.
 - The local evidence vault enforces write-once semantics through file
   permissions and content addressing. It is not proof against an administrator
   with filesystem access; S3 Object Lock in Compliance mode is, and is the

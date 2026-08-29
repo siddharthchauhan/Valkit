@@ -41,7 +41,7 @@ positions.
 | `terraform/variables.tf` | Inputs, including the EU-residency and single-tenant switches |
 | `terraform/s3_evidence.tf` | The evidence bucket: Object Lock, versioning, lifecycle, deny-delete policy |
 | `terraform/rds.tf` | PostgreSQL, encrypted, in private subnets |
-| `terraform/ecs.tf` | Fargate services for the API and the evaluation workers, behind an ALB |
+| `terraform/ecs.tf` | Fargate services for the API (`uvicorn api.main:app`) and the worker (`python -m valkit.worker`), behind an ALB |
 | `terraform/monitoring.tf` | EventBridge schedules, CloudWatch alarms, log retention |
 | `terraform/outputs.tf` | What a deployment needs to configure the application |
 | `postgres/schema.sql` | Tables for agents, runs, documents, signatures, evidence and change control |
@@ -65,3 +65,42 @@ does not need ingress from the internet at all, and its policy denies delete
 outright. The API task role can write evidence and read it back; it cannot
 delete. Nothing in the deployment holds a role that can remove an object under
 retention, because no such role can exist under Compliance mode.
+
+## Three things this configuration decides, and why
+
+**The console is off by default** (`serve_console = false`). ValKit does not
+authenticate anyone. `X-ValKit-Actor` says who a request claims to be for, and
+the API records exactly that claim — it does not verify it. So the load balancer
+needs an identity provider in front of it, populating that header from the
+authenticated session, before the console is reachable by anyone. Served without
+one, every audit record is only as trustworthy as the network. Signing is the
+exception and is safe either way: a signature is verified against the identity
+store's components regardless of the header, so a forged header can misattribute
+a specification ingestion but not an approval.
+
+**The API target group is sticky.** A validation in progress lives in the
+process that started it. The durable records — the hash-chained trail and the
+content-addressed evidence — are in Postgres and S3 and are shared; the pipeline
+holding the un-signed documents is working state, so a client has to reach the
+same instance from ingesting a specification through to signing. This is a
+constraint rather than a design goal: an instance replacement loses in-flight
+validations, though not their evidence, and re-running regenerates them.
+Implementing the persistence in `postgres/schema.sql` removes it, after which
+stickiness can be dropped and `api_desired_count` raised freely.
+
+**The always-on worker service runs zero replicas.** EventBridge is the
+scheduler here, and it runs exactly one task per firing. Running the service as
+well would re-evaluate every due agent twice — doubling the model spend, and
+putting two observations into the control chart for one point in time, which is
+enough to move the limits and change what the SPC rules report. The service
+exists for an environment without EventBridge, and the two are alternatives.
+Above one replica it is worse again: the worker has no leader election.
+
+## The seam this module does not close
+
+The worker reads the specifications it re-evaluates from `worker_spec_dir`.
+Getting them there is the deployment's job — an EFS mount, an S3 sync in the
+entrypoint, or baking them into the image. A worker that finds nothing exits 2,
+and the `missed-reevaluation` alarm treats missing data as breaching precisely
+because a worker that never ran and one that ran and found nothing look the same
+from outside, and both mean the evidence has a gap.

@@ -101,9 +101,41 @@ variable "api_desired_count" {
   default = 2
 }
 
+variable "serve_console" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Serve the web console from the API. Off by default: the console is not
+    authenticated by ValKit, so turning it on should be a decision someone made
+    rather than one they inherited. Put an identity provider in front of the
+    load balancer and have it populate X-ValKit-Actor before enabling this.
+  EOT
+}
+
+variable "worker_spec_dir" {
+  type        = string
+  default     = "/srv/valkit/specs"
+  description = <<-EOT
+    Where the worker looks for the specifications it re-evaluates. Populating
+    this path is the deployment's job — mount EFS, sync from S3 in the
+    entrypoint, or bake the specifications into the image.
+  EOT
+}
+
+# Zero by default, and not an oversight. Scheduling here is EventBridge's job
+# (see monitoring.tf), which runs exactly one worker task per firing. The
+# always-on service below is the alternative for an environment without
+# EventBridge, and the two are mutually exclusive: running both re-evaluates
+# every due agent twice, which doubles the model spend and puts two
+# observations into the control chart for one point in time — enough to move
+# the limits and change what the SPC rules report.
+#
+# Above one it is worse again: the worker has no leader election, so N replicas
+# do the same work N times. Raise this only if you have made the loop exclusive
+# some other way.
 variable "worker_desired_count" {
   type    = number
-  default = 2
+  default = 0
 }
 
 variable "db_instance_class" {

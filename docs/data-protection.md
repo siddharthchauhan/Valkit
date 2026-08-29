@@ -115,10 +115,32 @@ defence: the audit trail is the one store from which nothing can later be
 removed, so anything that reached it would be exposed for the life of the
 record.
 
-The CLI refuses to accept a password as a command-line argument, since argv
-lands in shell history and is visible in the process table. A prompt or an
-environment variable are the only routes in.
+Each entry point has its own way of getting this wrong, so each is closed
+explicitly:
+
+**The CLI** refuses a password as a command-line argument, since argv lands in
+shell history and is visible in the process table. A prompt or an environment
+variable are the only routes in.
+
+**The HTTP API** takes the components in the request body and nowhere else —
+never a query parameter, because query strings reach access logs, proxy logs,
+browser history and referrer headers. A test walks the OpenAPI schema and
+asserts no query or path parameter on any route is named like a credential, so
+adding one later fails the suite rather than passing review.
+
+The subtle one is the error path. FastAPI's default validation handler returns
+the input that failed validation, which for a signing request is the password
+itself, in a 422 body as durable as any log line. ValKit installs a handler that
+redacts first.
+
+**The MCP tools** never echo a credential in a tool result. A tool result is
+model context and may be persisted in a transcript, so a leak there survives the
+call that caused it.
+
+**The worker** never signs at all, so it never holds a component.
 
 A test sweeps every surface — the signature record, the rendered manifest, the
-audit trail in both export forms, the generated documents, and `repr()` of the
-session and signature objects — and asserts no password appears in any of them.
+audit trail in both export forms, the generated documents, `repr()` of the
+session and signature objects, every API response including the failure
+responses, and the MCP tool results — and asserts no password appears in any of
+them.
