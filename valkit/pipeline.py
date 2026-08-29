@@ -45,6 +45,7 @@ from .models import (
     EvalRun,
     RiskLevel,
     RunStatus,
+    TestCase,
     TestExecution,
     ValidationRecord,
     ValidationStatus,
@@ -56,7 +57,90 @@ from .trace.rtm import build_rtm
 from .util import Clock, SystemClock
 from .vault.store import EvidenceVault
 
-__all__ = ["ValidationPipeline", "Readiness", "PipelineResult", "validate_agent"]
+__all__ = [
+    "ValidationPipeline",
+    "Readiness",
+    "PipelineResult",
+    "validate_agent",
+    "derive_executions",
+]
+
+
+def derive_executions(
+    tests: Sequence[TestCase], run: EvalRun, *, clock: Clock | None = None
+) -> list[TestExecution]:
+    """Record which of ``tests`` the run demonstrates, and any deviations.
+
+    Shared by the pipeline and the MCP surface so that both produce the same
+    execution records: a qualification report generated through a tool call and
+    one generated through the pipeline have to be the same document, or the
+    evidence depends on the route taken to produce it.
+
+    A test with no metric is recorded as verified against the run record. An
+    unscripted performance-qualification step is omitted entirely: it is
+    executed against live operation, which has not happened, and recording it as
+    passed would be a false claim.
+    """
+    clock = clock or SystemClock()
+    evidence_refs = [run.transcripts_ref] if run.transcripts_ref else []
+    executions: list[TestExecution] = []
+
+    for test in tests:
+        metric = run.metric(test.metric_name) if test.metric_name else None
+        deviations: list[Deviation] = []
+        passed = True
+        observed = "Verified against the run record."
+
+        if metric is not None:
+            passed = metric.passed
+            observed = metric.rationale
+            if metric.failing_sample_ids:
+                deviations.append(
+                    Deviation(
+                        deviation_id=f"DEV-{test.test_id}",
+                        test_id=test.test_id,
+                        description=(
+                            f"{len(metric.failing_sample_ids)} case(s) did not meet the "
+                            f"{metric.name} criterion."
+                        ),
+                        severity=RiskLevel.HIGH if not metric.passed else RiskLevel.MEDIUM,
+                        sample_ids=metric.failing_sample_ids,
+                        disposition=(
+                            "Recorded for review. Disposition is the quality function's "
+                            "to determine."
+                        ),
+                    )
+                )
+            if metric.errors:
+                deviations.append(
+                    Deviation(
+                        deviation_id=f"DEV-{test.test_id}-ERR",
+                        test_id=test.test_id,
+                        description=(
+                            f"{metric.errors} case(s) failed to execute and were excluded "
+                            f"from the denominator."
+                        ),
+                        severity=RiskLevel.LOW,
+                        disposition="Execution errors, not agent failures.",
+                    )
+                )
+        elif test.phase.value == "PQ" and not test.scripted:
+            continue
+
+        executions.append(
+            TestExecution(
+                test_id=test.test_id,
+                run_id=run.run_id,
+                executed_at=clock.now_iso(),
+                passed=passed,
+                observed_result=observed,
+                evidence_refs=list(evidence_refs),
+                deviations=deviations,
+                executed_by="ValKit evaluation harness",
+                harness=run.harness,
+            )
+        )
+    return executions
 
 
 @dataclass
@@ -246,67 +330,7 @@ class ValidationPipeline:
         bundle = self._require_bundle()
         run = self._require_run()
 
-        evidence_refs = [run.transcripts_ref] if run.transcripts_ref else []
-        executions: list[TestExecution] = []
-        for test in bundle.tests:
-            metric = run.metric(test.metric_name) if test.metric_name else None
-            deviations: list[Deviation] = []
-            passed = True
-            observed = "Verified against the run record."
-
-            if metric is not None:
-                passed = metric.passed
-                observed = metric.rationale
-                if metric.failing_sample_ids:
-                    deviations.append(
-                        Deviation(
-                            deviation_id=f"DEV-{test.test_id}",
-                            test_id=test.test_id,
-                            description=(
-                                f"{len(metric.failing_sample_ids)} case(s) did not meet the "
-                                f"{metric.name} criterion."
-                            ),
-                            severity=RiskLevel.HIGH if not metric.passed else RiskLevel.MEDIUM,
-                            sample_ids=metric.failing_sample_ids,
-                            disposition=(
-                                "Recorded for review. Disposition is the quality function's "
-                                "to determine."
-                            ),
-                        )
-                    )
-                if metric.errors:
-                    deviations.append(
-                        Deviation(
-                            deviation_id=f"DEV-{test.test_id}-ERR",
-                            test_id=test.test_id,
-                            description=(
-                                f"{metric.errors} case(s) failed to execute and were excluded "
-                                f"from the denominator."
-                            ),
-                            severity=RiskLevel.LOW,
-                            disposition="Execution errors, not agent failures.",
-                        )
-                    )
-            elif test.phase.value == "PQ" and not test.scripted:
-                # An unscripted performance-qualification step is executed
-                # against live operation, which has not happened yet. Recording
-                # it as passed here would be a false claim.
-                continue
-
-            executions.append(
-                TestExecution(
-                    test_id=test.test_id,
-                    run_id=run.run_id,
-                    executed_at=self._clock.now_iso(),
-                    passed=passed,
-                    observed_result=observed,
-                    evidence_refs=list(evidence_refs),
-                    deviations=deviations,
-                    executed_by="ValKit evaluation harness",
-                    harness=run.harness,
-                )
-            )
-
+        executions = derive_executions(bundle.tests, run, clock=self._clock)
         self.record = record.replace(executions=executions)
         self.graph = self._build_graph()
         return executions
