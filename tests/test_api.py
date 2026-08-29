@@ -245,13 +245,22 @@ class TestDocuments:
             assert response.status_code == 405, method
 
     def test_no_route_in_the_api_mutates_in_place(self, client):
-        app = client.app
+        """Records are append-only, and this is where that is enforced.
+
+        Read from the OpenAPI schema rather than from ``app.routes``: the
+        routes are nested inside included routers, so a walk of the top level
+        sees only the two health endpoints and would pass with a DELETE sitting
+        on every other path.
+        """
+        schema = client.get("/openapi.json").json()
         methods = {
-            method
-            for route in app.routes
-            for method in getattr(route, "methods", set())
+            method.upper()
+            for operations in schema["paths"].values()
+            for method in operations
         }
-        assert methods <= {"GET", "POST", "HEAD"}
+        assert methods, "no operations were found to check"
+        assert len(schema["paths"]) > 15, schema["paths"].keys()
+        assert methods <= {"GET", "POST"}, sorted(methods)
 
 
 class TestSigning:

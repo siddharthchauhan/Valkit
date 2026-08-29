@@ -51,8 +51,18 @@ valkit = "valkit.cli:main"
 [tool.setuptools.packages.find]
 include = ["valkit*", "api*"]
 
+# Data files, which packages.find does not see because they hold no Python.
+# Everything here works from a checkout whether or not it is listed, so an
+# omission only shows up in an installed wheel — which is to say, in the
+# container. tests/test_packaging.py asserts this list against what is actually
+# on disk rather than against itself.
 [tool.setuptools.package-data]
-valkit = ["templates/**/*.j2", "templates/**/*.css"]
+valkit = [
+  "templates/**/*.j2",
+  # Without this an installed ValKit cannot open an audit trail at all.
+  "audit/*.sql",
+]
+api = ["static/*.html", "static/*.js", "static/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

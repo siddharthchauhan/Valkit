@@ -77,6 +77,45 @@ jobs:
           python -m valkit.worker --scheduled --workspace .valkit-ci examples/valkit.yaml \
             | grep -q "not due"
 
+  wheel:
+    name: An installed wheel works
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Data files are found on disk by path, so the templates, the audit
+      # schema and the console assets work from a checkout whether or not
+      # pyproject declares them. An omission shows up only here — which in
+      # practice means in the container, where an installed ValKit that cannot
+      # read its audit schema cannot open an audit trail at all.
+      - name: Build and install the wheel, outside the source tree
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist .
+          cd /tmp
+          python -m venv wheelenv
+          ./wheelenv/bin/pip install "$(ls ${GITHUB_WORKSPACE}/dist/*.whl)[api]"
+
+      - name: Exercise what only an install can break
+        run: |
+          cd /tmp
+          ./wheelenv/bin/python - <<'PY'
+          from valkit.audit import AuditTrail
+          from valkit.docgen import DocumentGenerator
+          from api.main import STATIC_DIR
+
+          trail = AuditTrail(":memory:")
+          assert trail.verify().ok, "the audit schema did not ship"
+          assert len(DocumentGenerator().environment.list_templates()) >= 20
+          for name in ("index.html", "app.js", "styles.css"):
+              assert (STATIC_DIR / name).is_file(), name
+          print("templates, audit schema and console assets all present")
+          PY
+          ./wheelenv/bin/valkit --version
+
   demo:
     name: Demonstration runs end to end
     runs-on: ubuntu-latest
