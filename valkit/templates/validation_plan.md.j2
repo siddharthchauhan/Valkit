@@ -1,0 +1,109 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose and scope
+
+This plan states how {{ metadata.agent_id }} version {{ metadata.version }} will
+be qualified for its declared context of use, what evidence will be gathered,
+and what will count as acceptable.
+
+{{ context_of_use.question_of_interest | sentence }}
+
+## 2. System description
+
+{{ metadata.description | sentence or 'No description was supplied in the specification.' }}
+
+The system is GAMP category {{ gamp.category.value }}{% if gamp.category.value == 5 %}: the agent's behaviour is determined by prompts, tool surface and model configuration specific to this use, so there is no supplier assurance to rely on and no installed base{% endif %}.
+
+## 3. Risk basis
+
+The applied model risk class is **{{ assessment.risk_class | risk_badge }}**.
+The full determination is in the risk assessment; the rigour of the activities
+below follows from it.
+
+## 4. Validation approach
+
+Qualification is in three phases.
+
+**Installation qualification** establishes that the evaluation apparatus is what
+it claims to be: harness version, dataset digest, model identity, and a
+verifiable audit trail and evidence store. A result that cannot be attributed to
+a known configuration is not evidence.
+
+**Operational qualification** demonstrates each acceptance criterion against the
+approved qualification set, using a one-sided lower confidence bound rather than
+the observed rate.
+
+**Performance qualification** covers the controls that exist only in the live
+workflow: human review, scheduled re-evaluation, drift detection, change control
+and periodic review. These are the controls a validation package most often
+asserts and least often tests.
+
+## 5. Acceptance criteria
+
+{% for m in metrics %}
+- **{{ m.name }}** ({{ m.type.value }}{% if not m.critical %}, advisory{% endif %}): {% if m.max_count is not none %}no more than {{ m.max_count }} occurrence(s){% elif m.baseline is not none %}non-inferior to {{ m.baseline | proportion }} within a margin of {{ m.margin | proportion }}{% else %}one-sided {{ m.confidence | percent(0) }} {{ m.method.value | replace('_lower','') | replace('_','-') }} lower bound at or above {{ m.target | proportion }}{% endif %}. Scored by `{{ m.scorer_name }}`.
+{% endfor %}
+
+{% if acceptance.judge_calibration %}
+Where a model is used to grade outputs, its agreement with human assessment is
+measured on a labelled subset. Sign-off is blocked below Cohen's kappa of
+{{ acceptance.judge_calibration.min_cohen_kappa }}, computed over at least
+{{ acceptance.judge_calibration.min_samples }} labelled cases. An LLM judge is an
+unvalidated measuring instrument until that agreement is quantified.
+{% endif %}
+
+## 6. Qualification data
+
+{% if dataset_summary %}
+| | |
+| --- | --- |
+| Cases | {{ dataset_summary.n }} |
+| Human-labelled | {{ dataset_summary.labelled }} |
+| Flagged as containing PHI | {{ dataset_summary.phi }} |
+| Strata | {{ dataset_summary.strata | length }} |
+| Duplicate inputs | {{ dataset_summary.duplicate_inputs }} |
+
+{% if dataset_summary.notes %}
+Observations on the qualification set:
+
+{{ dataset_summary.notes | bullets }}
+{% endif %}
+
+The statistical acceptance argument assumes the cases are independent and
+representative of the intended use. No arithmetic can establish that; it rests
+on the curation of the set, which is why its composition is stated here.
+{% else %}
+The qualification dataset is identified in the functional specification.
+{% endif %}
+
+## 7. Test summary
+
+| Phase | Tests |
+| --- | --- |
+| Installation qualification | {{ iq_tests | length }} |
+| Operational qualification | {{ oq_tests | length }} |
+| Performance qualification | {{ pq_tests | length }} |
+
+## 8. Deviations and change control
+
+Any result outside the acceptance criteria is recorded as a deviation with its
+disposition. Any change to the model, prompt, dataset or specification after
+qualification is handled through change control, which determines the scope of
+re-evaluation required before validated status is restored.
+
+## 9. Roles
+
+| Role | Assigned to |
+| --- | --- |
+{% for a in signoff.approvers %}
+| Approver | {{ a }} |
+{% endfor %}
+{% for r in signoff.reviewers %}
+| Reviewer | {{ r }} |
+{% endfor %}
+
+{% if signoff.require_distinct_signers %}
+The author of a document may not also approve it.
+{% endif %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

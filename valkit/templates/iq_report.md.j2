@@ -1,0 +1,39 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This report records the execution of the installation qualification: whether the
+evaluation apparatus was the qualified one.
+
+{% if run %}
+## 2. Apparatus as executed
+
+| | |
+| --- | --- |
+| Harness | {{ run.harness.name }} {{ run.harness.version }} |
+| Provider | `{{ run.harness.provider }}` |
+| Configuration digest | `{{ run.harness.config_sha256 | digest(24) }}` |
+| Python | {{ run.harness.python_version }} |
+| Platform | {{ run.harness.platform }} |
+| Model | `{{ run.model }}` |
+| Judge model | `{{ run.judge_model or 'Not configured' }}` |
+| Seed | {{ run.seed if run.seed is not none else 'Not pinned' }} |
+| Qualification set | `{{ run.dataset_ref }}` |
+| Dataset digest | `{{ run.dataset_sha256 | digest(24) }}` |
+| Specification digest | `{{ run.spec_sha256 | digest(24) }}` |
+| Run | {{ run.run_id }} |
+| Started | {{ run.started_at }} |
+| Finished | {{ run.finished_at }} |
+
+The configuration digest covers the specification, the dataset, the scorers in
+play, the model parameters and the seed. Two runs sharing this digest that
+disagree would indicate non-determinism, which is itself a finding.
+{% endif %}
+
+## 3. Test results
+
+{% set phase_tests = iq_tests %}
+{% include '_report_body.md.j2' %}
+{% include '_evidence.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

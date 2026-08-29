@@ -1,0 +1,91 @@
+{% include '_header.md.j2' %}
+
+## 1. Method
+
+Model risk is assessed on the two axes of the FDA credibility framework: the
+influence of the agent's output on the decision, and the consequence of that
+decision being wrong. The combination is read from an explicit matrix, after
+which escalation rules are applied. No rule lowers a risk class.
+
+Severity, probability and detectability for individual failure modes follow the
+two-step method common to GAMP 5 and ICH Q9(R1): severity and probability give
+a priority, which detectability then modifies, because a failure that cannot be
+seen cannot be corrected.
+
+## 2. Model risk determination
+
+| | |
+| --- | --- |
+| Model influence | {{ assessment.model_influence | risk_badge }} |
+| Decision consequence | {{ assessment.decision_consequence | risk_badge }} |
+| Matrix result | {{ assessment.matrix_cell | risk_badge }} |
+| Derived class after escalation | {{ assessment.derived_class | risk_badge }} |
+| **Applied risk class** | **{{ assessment.risk_class | risk_badge }}** |
+| Specification override applied | {{ assessment.overridden | yes_no }} |
+| GAMP category | {{ assessment.gamp_category.value }} |
+
+### Influence by consequence matrix
+
+| Influence \ Consequence | Low | Medium | High |
+| --- | --- | --- | --- |
+| **Low** | low | low | medium |
+| **Medium** | low | medium | high |
+| **High** | medium | high | high |
+
+The cell applying here is influence {{ assessment.model_influence.value }} by
+consequence {{ assessment.decision_consequence.value }}, giving
+{{ assessment.matrix_cell.value }}.
+
+### Adjustments applied
+
+{{ assessment.escalations | bullets('No escalation rules applied.') }}
+
+### Rationale
+
+{{ assessment.rationale }}
+
+## 3. Evidence proportionate to the class
+
+{% if assessment.required_rigor %}
+| | |
+| --- | --- |
+| Minimum qualification set | {{ assessment.required_rigor.minimum_golden_set }} cases |
+| Judge calibration | {{ assessment.required_rigor.judge_calibration_required | yes_no }} |
+| Adversarial testing | {{ assessment.required_rigor.red_team_required | yes_no }} |
+| Scheduled re-evaluation | {{ assessment.required_rigor.monitoring_required | yes_no }} |
+| Independent approver | {{ assessment.required_rigor.independent_approver_required | yes_no }} |
+| Periodic review | every {{ assessment.required_rigor.review_months }} months |
+
+{{ assessment.required_rigor.notes | sentence }}
+
+These are proportionality recommendations rather than regulatory minima. No
+regulation states a qualification set size; the quality function remains
+responsible for the determination.
+{% endif %}
+
+## 4. Failure modes
+
+{% for risk in risks %}
+### {{ risk.risk_id }} — {{ risk.failure_mode }}
+
+{{ risk.description | sentence }}
+
+| | |
+| --- | --- |
+| Category | {{ risk.category }} |
+| Severity | {{ risk.severity | risk_badge }} |
+| Probability | {{ risk.probability | risk_badge }} |
+| Detectability (difficulty of detection) | {{ risk.detectability | risk_badge }} |
+| Risk class | {{ risk.risk_class | risk_badge }} |
+| Residual risk after mitigation | {{ risk.residual_risk | risk_badge }} |
+| Threatens | {{ risk.requirement_ids | join(', ') or '—' }} |
+
+*Mitigation.* {{ risk.mitigation | sentence }}
+
+{% endfor %}
+
+Residual risk is never recorded as eliminated. A control reduces a risk by at
+most one class; claiming that a control removes a failure mode entirely is a
+statement that does not survive inspection.
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

@@ -1,0 +1,38 @@
+{% include '_header.md.j2' %}
+
+## Change
+
+| | |
+| --- | --- |
+| Identifier | {{ change_control.cc_id }} |
+| Trigger | {{ change_control.trigger.value }} |
+| Status | {{ change_control.status.value }} |
+| Opened | {{ change_control.opened_at }} |
+| Closed | {{ change_control.closed_at or 'Open' }} |
+| Prior version | {{ change_control.prior_version or '—' }} |
+| New version | {{ change_control.new_version or '—' }} |
+
+**Reason.** {{ change_control.reason | sentence }}
+
+## Impact assessment
+
+{{ change_control.impact | sentence or 'Impact has not yet been assessed.' }}
+
+## Required re-evaluation scope
+
+{{ change_control.required_scope | bullets('No re-evaluation scope has been determined.') }}
+
+## Evidence
+
+{% if change_control.run_ids %}
+Runs attached to this change: {{ change_control.run_ids | join(', ') }}.
+{% else %}
+No re-evaluation has been attached to this change. Validated status cannot be
+restored until the required scope has been re-executed and passed.
+{% endif %}
+
+## Outcome
+
+{{ change_control.outcome | sentence or 'Not yet determined.' }}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

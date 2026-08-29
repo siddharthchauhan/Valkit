@@ -1,0 +1,15 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This protocol demonstrates each acceptance criterion against the approved qualification set. Acceptance is decided on a one-sided lower confidence bound, not on the observed pass rate: the observed rate is what happened in the sample, and the bound is what the sample supports as a claim about the agent.
+
+## 2. Tests
+
+{% set phase_tests = oq_tests %}
+{% if not phase_tests %}
+No operational qualification tests were derived for this agent.
+{% endif %}
+{% include '_protocol_body.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

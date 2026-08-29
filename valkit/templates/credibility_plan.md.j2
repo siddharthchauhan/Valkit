@@ -1,0 +1,58 @@
+{% include '_header.md.j2' %}
+
+This plan follows the seven-step credibility assessment framework set out in
+FDA's January 2025 draft guidance *Considerations for the Use of Artificial
+Intelligence to Support Regulatory Decision-Making for Drug and Biological
+Products*. That guidance is a **draft** and has not been finalised; the
+framework is applied here as best practice, alongside the final standards the
+validation plan cites.
+
+## Step 1 — Question of interest
+
+{{ context_of_use.question_of_interest | sentence }}
+
+## Step 2 — Context of use
+
+{{ context_of_use.role | sentence }}
+
+**In scope**
+
+{{ intended_use.in_scope | bullets }}
+
+**Out of scope**
+
+{{ intended_use.out_of_scope | bullets }}
+
+## Step 3 — Model risk
+
+| | |
+| --- | --- |
+| Model influence | {{ assessment.model_influence | risk_badge }} |
+| Decision consequence | {{ assessment.decision_consequence | risk_badge }} |
+| Model risk | {{ assessment.risk_class | risk_badge }} |
+
+{{ assessment.rationale }}
+
+## Step 4 — Credibility assessment plan
+
+The following evidence will be gathered, at a rigour proportionate to the model
+risk determined in step 3.
+
+{% for m in metrics %}
+- **{{ m.name }}**: {% if m.max_count is not none %}no more than {{ m.max_count }} occurrence(s){% elif m.baseline is not none %}non-inferiority to {{ m.baseline | proportion }} within {{ m.margin | proportion }}{% else %}one-sided {{ m.confidence | percent(0) }} {{ m.method.value | replace('_lower','') | replace('_','-') }} lower bound at or above {{ m.target | proportion }}{% endif %}{% if not m.critical %} (advisory){% endif %}.
+{% endfor %}
+
+{% if datasets.red_team %}
+- **Adversarial testing** against `{{ datasets.red_team.ref }}`, covering prompt
+  injection, out-of-scope requests and attempts to elicit protected information.
+{% endif %}
+{% if acceptance.judge_calibration %}
+- **Judge calibration**: Cohen's kappa at or above
+  {{ acceptance.judge_calibration.min_cohen_kappa }} over at least
+  {{ acceptance.judge_calibration.min_samples }} human-labelled cases.
+{% endif %}
+
+Steps 5 to 7 — execution, results, and the adequacy determination — are recorded
+in the credibility assessment report once the plan has been executed.
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

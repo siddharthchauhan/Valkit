@@ -1,0 +1,10 @@
+{% if evidence %}
+
+## Evidence appendix
+
+Every artefact supporting this document, identified by the SHA-256 digest of
+its contents. An identifier that resolves in the vault is itself proof that the
+bytes are the ones recorded here.
+
+{{ evidence | map(attribute='__dict__') | list | table(['evidence_id', 'kind', 'size_bytes', 'stored_at', 'retention_until']) }}
+{% endif %}

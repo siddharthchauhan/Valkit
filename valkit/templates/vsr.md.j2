@@ -1,0 +1,122 @@
+{% include '_header.md.j2' %}
+
+## 1. Conclusion
+
+{% if critical_metrics_passed and coverage.complete and (calibration is none or calibration.passed) %}
+{{ metadata.agent_id }} version {{ metadata.version }} **meets its acceptance
+criteria** for the context of use stated below, on the evidence recorded in this
+package.
+{% else %}
+{{ metadata.agent_id }} version {{ metadata.version }} **does not meet its
+acceptance criteria** on the evidence recorded in this package. The specific
+shortfalls are in section 4. The agent is not validated for the stated context
+of use.
+{% endif %}
+
+## 2. Context of use
+
+{{ context_of_use.question_of_interest | sentence }}
+
+{{ context_of_use.role | sentence }}
+
+Model risk was assessed as **{{ assessment.risk_class | risk_badge }}**.
+
+## 3. What was executed
+
+| | |
+| --- | --- |
+| Run | {{ run.run_id }} |
+| Model | `{{ run.model }}` |
+| Qualification set | `{{ run.dataset_ref }}` ({{ run.samples | length }} cases) |
+| Dataset digest | `{{ run.dataset_sha256 | digest(24) }}` |
+| Harness | {{ run.harness.name }} {{ run.harness.version }} |
+| Executed | {{ run.started_at }} to {{ run.finished_at }} |
+
+## 4. Acceptance results
+
+| Criterion | Observed | Bound | Target | Outcome |
+| --- | --- | --- | --- | --- |
+{% for m in metric_results %}
+| {{ m.name }}{% if not m.critical %} (advisory){% endif %} | k={{ m.k }}/{{ m.n }}, p-hat={{ m.point_estimate | proportion }} | {{ m.lower_bound | proportion if m.lower_bound is not none else 'not applicable' }} | {{ m.target | proportion if m.target is not none else '—' }} | **{{ m.passed | verdict }}** |
+{% endfor %}
+
+Each bound is a one-sided lower confidence limit at the stated confidence: the
+value the true rate exceeds, not the rate observed in the sample.
+
+{% if calibration %}
+**Judge calibration.** Cohen's kappa {{ calibration.cohen_kappa | proportion(3) }}
+over {{ calibration.n }} labelled case(s), required minimum
+{{ calibration.min_required | proportion(2) }}: **{{ calibration.passed | verdict }}**.
+{% endif %}
+
+## 5. Coverage
+
+| Measure | Value |
+| --- | --- |
+| Critical requirements verified | {{ coverage.critical_covered }} of {{ coverage.critical_total }} |
+| All requirements verified | {{ coverage.requirements_covered }} of {{ coverage.requirements_total }} |
+| Risks with a verifying test | {{ coverage.risks_mitigated }} of {{ coverage.risks_total }} |
+| Tests executed | {{ coverage.tests_executed }} of {{ coverage.tests_total }} |
+
+{% if not coverage.complete %}
+Critical-requirement coverage is incomplete. A critical requirement with no
+verifying test is not validated, and the package cannot be considered complete
+while any remain.
+{% endif %}
+
+## 6. Deviations
+
+{% if deviations %}
+{% for d in deviations %}
+- **{{ d.deviation_id }}** ({{ d.severity | risk_badge }}) against {{ d.test_id }}: {{ d.description | sentence }} {% if d.disposition %}Disposition: {{ d.disposition | sentence }}{% else %}Disposition: not yet recorded.{% endif %}
+{% endfor %}
+{% else %}
+No deviations were recorded.
+{% endif %}
+
+{% if change_controls %}
+## 7. Change controls
+
+{% for cc in change_controls %}
+- **{{ cc.cc_id }}** ({{ cc.status.value }}, trigger {{ cc.trigger.value }}): {{ cc.reason | sentence }}
+{% endfor %}
+{% endif %}
+
+## {{ 8 if change_controls else 7 }}. Statement of fitness and limitations
+
+{% if critical_metrics_passed and coverage.complete %}
+On the evidence in this package, the agent is fit for the context of use in
+section 2, subject to the limitations below and to the controls that context
+depends on remaining in place.
+{% else %}
+The agent is not fit for release for the context of use in section 2 on this
+evidence.
+{% endif %}
+
+**Limitations.**
+
+{% if intended_use.limitations %}
+{{ intended_use.limitations | bullets }}
+{% else %}
+No limitations beyond the declared scope were recorded.
+{% endif %}
+
+**Excluded from this validation.**
+
+{{ intended_use.out_of_scope | bullets('No exclusions were declared.') }}
+
+{% if monitoring.schedule %}
+**Continued validity.** This conclusion holds for the model, prompt, dataset and
+specification recorded above. A model provider can change behaviour without any
+change on the customer's side, so validated status is maintained by
+re-evaluation on the schedule `{{ monitoring.schedule }}` with drift monitoring
+and change control, and is reviewed every
+{{ monitoring.periodic_review_months }} months.
+{% else %}
+**Continued validity.** No re-evaluation schedule is configured. A model
+provider can change behaviour without any change on the customer's side, so this
+conclusion may cease to hold without notice.
+{% endif %}
+{% include '_evidence.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

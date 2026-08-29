@@ -1,0 +1,17 @@
+
+## Approvals
+
+{% if signature_block %}
+{{ signature_block }}
+{% else %}
+This document is unsigned. It is a draft and carries no approval.
+
+| Role | Name | Signature | Date (UTC) |
+| --- | --- | --- | --- |
+{% for approver in signoff.approvers %}
+| Approver | {{ approver }} | | |
+{% endfor %}
+{% for reviewer in signoff.reviewers %}
+| Reviewer | {{ reviewer }} | | |
+{% endfor %}
+{% endif %}

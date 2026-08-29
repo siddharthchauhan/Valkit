@@ -1,0 +1,32 @@
+{% for t in phase_tests %}
+### {{ t.test_id }} — {{ t.title }}
+
+**Objective.** {{ t.objective | sentence }}
+
+**Verifies.** {{ t.requirement_ids | join(', ') or 'Not linked' }}
+{% if t.risk_ids %}
+**Mitigates.** {{ t.risk_ids | join(', ') }}
+{% endif %}
+**Test type.** {{ 'Scripted' if t.scripted else 'Unscripted' }}
+
+{% if t.prerequisites %}
+**Prerequisites**
+
+{{ t.prerequisites | bullets }}
+{% endif %}
+
+**Acceptance criteria.** {{ t.acceptance_text | sentence }}
+
+**Procedure**
+
+{% for step in t.procedure %}
+{{ loop.index }}. {{ step }}
+{% endfor %}
+
+**Expected result.** {{ t.expected_result | sentence }}
+
+| Observed result | | Executed by | | Date (UTC) | |
+| --- | --- | --- | --- | --- | --- |
+| | | | | | |
+
+{% endfor %}

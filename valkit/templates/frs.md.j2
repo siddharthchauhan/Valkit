@@ -1,0 +1,51 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This specification states how the system provides the user requirements. Each
+functional requirement names the user requirement it realises, so that the
+traceability matrix can carry verification from one to the other.
+
+## 2. System configuration
+
+| | |
+| --- | --- |
+| Primary model | `{{ models.primary }}` |
+| Judge model | `{{ models.judge or 'Not configured' }}` |
+| Local model for PHI | `{{ models.phi_safe_local or 'Not configured' }}` |
+| Temperature | {{ models.temperature }} |
+| Seed | {{ models.seed if models.seed is not none else 'Not pinned' }} |
+
+{% if models.temperature == 0.0 and models.seed is not none %}
+Temperature is zero and the seed is pinned, so a run is repeatable: the same
+inputs against the same model version produce the same outputs.
+{% else %}
+The model is not configured deterministically. A qualification run executed
+under this configuration cannot be repeated exactly, and the validation plan
+must justify that choice.
+{% endif %}
+
+## 3. Qualification data
+
+| Dataset | Reference | Digest | Version |
+| --- | --- | --- | --- |
+{% if datasets.golden_set %}
+| Golden set | `{{ datasets.golden_set.ref }}` | `{{ datasets.golden_set.sha256 | digest(16) }}` | {{ datasets.golden_set.version or '—' }} |
+{% endif %}
+{% if datasets.red_team %}
+| Adversarial set | `{{ datasets.red_team.ref }}` | `{{ datasets.red_team.sha256 | digest(16) }}` | {{ datasets.red_team.version or '—' }} |
+{% endif %}
+
+## 4. Functional requirements
+
+{% for r in functional_requirements %}
+### {{ r.req_id }}
+
+{{ r.text | sentence }}
+
+*Realises.* {{ r.parent_ids | join(', ') or 'Not linked' }}
+*Derivation.* {{ r.source }}
+
+{% endfor %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

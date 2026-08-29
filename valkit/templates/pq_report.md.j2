@@ -1,0 +1,22 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This report records the execution of the performance qualification: whether the
+controls the validation relies on operate in the live workflow.
+
+{% if drift_alerts %}
+## 2. Monitoring observations
+
+{% for a in drift_alerts %}
+- **{{ a.alert_id }}** ({{ a.severity.value | upper }}) on {{ a.metric }} at {{ a.raised_at }}: {{ a.message | sentence }}
+{% endfor %}
+{% endif %}
+
+## {{ 3 if drift_alerts else 2 }}. Test results
+
+{% set phase_tests = pq_tests %}
+{% include '_report_body.md.j2' %}
+{% include '_evidence.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

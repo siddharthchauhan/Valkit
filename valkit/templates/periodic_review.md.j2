@@ -1,0 +1,36 @@
+{% include '_header.md.j2' %}
+
+## Period under review
+
+{{ periodic_review.period_start }} to {{ periodic_review.period_end }}
+
+| Measure | Value |
+| --- | --- |
+| Re-evaluations scheduled | {{ periodic_review.scheduled_runs }} |
+| Re-evaluations executed | {{ periodic_review.executed_runs }} |
+| Drift events | {{ periodic_review.drift_events }} |
+| Change controls | {{ periodic_review.change_controls }} |
+| Deviations | {{ periodic_review.deviations }} |
+{% if periodic_review.kappa_min is not none %}
+| Judge kappa range | {{ periodic_review.kappa_min | proportion(2) }} to {{ periodic_review.kappa_max | proportion(2) }} |
+{% endif %}
+
+{% if periodic_review.executed_runs < periodic_review.scheduled_runs %}
+{{ periodic_review.scheduled_runs - periodic_review.executed_runs }} scheduled
+re-evaluation(s) did not execute. A gap in monitoring is a gap in the evidence
+that the agent remained within its acceptance criteria, and should be
+investigated rather than noted.
+{% endif %}
+
+## Conclusion
+
+{{ periodic_review.conclusion | sentence }}
+
+**Remains validated for the stated context of use:
+{{ periodic_review.remains_validated | yes_no }}.**
+
+{% if periodic_review.next_review_due %}
+Next review due {{ periodic_review.next_review_due }}.
+{% endif %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

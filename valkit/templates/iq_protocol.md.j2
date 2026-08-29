@@ -1,0 +1,15 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This protocol establishes that the evaluation apparatus is what it claims to be. A result that cannot be attributed to a known harness version, a known dataset and a known model configuration is not evidence, whatever it says.
+
+## 2. Tests
+
+{% set phase_tests = iq_tests %}
+{% if not phase_tests %}
+No installation qualification tests were derived for this agent.
+{% endif %}
+{% include '_protocol_body.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

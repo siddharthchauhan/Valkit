@@ -1,0 +1,72 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This specification states what {{ metadata.agent_id }} is required to do for its
+intended users. It is derived from the declared context of use and acceptance
+criteria, and is the basis against which the system is qualified.
+
+## 2. Context of use
+
+{{ context_of_use.question_of_interest | sentence }}
+
+**How the output is used.** {{ context_of_use.role | sentence }}
+
+| | |
+| --- | --- |
+| Model influence on the decision | {{ context_of_use.model_influence | risk_badge }} |
+| Consequence of an incorrect decision | {{ context_of_use.decision_consequence | risk_badge }} |
+| Regulatory impact | {{ context_of_use.regulatory_impact | risk_badge }} |
+| Human reviews every output | {{ context_of_use.human_in_the_loop | yes_no }} |
+| Patient safety impact | {{ context_of_use.patient_safety_impact | yes_no }} |
+| Product quality impact | {{ context_of_use.product_quality_impact | yes_no }} |
+| Data integrity impact | {{ context_of_use.data_integrity_impact | yes_no }} |
+
+## 3. Scope
+
+**In scope**
+
+{{ intended_use.in_scope | bullets('No in-scope tasks were declared.') }}
+
+**Out of scope**
+
+{{ intended_use.out_of_scope | bullets('No exclusions were declared.') }}
+
+{% if intended_use.users %}
+**Users**
+
+{{ intended_use.users | bullets }}
+{% endif %}
+{% if intended_use.limitations %}
+**Stated limitations**
+
+{{ intended_use.limitations | bullets }}
+{% endif %}
+
+## 4. User requirements
+
+{% for r in user_requirements %}
+### {{ r.req_id }}
+
+{{ r.text | sentence }}
+
+*Rationale.* {{ r.rationale | sentence }}
+*Source.* `{{ r.source }}` · *Critical.* {{ r.critical | yes_no }}
+
+{% endfor %}
+
+## 5. Regulatory requirements
+
+These arise from regulation rather than from the intended use, and apply
+regardless of what the agent does.
+
+{% for r in regulatory_requirements %}
+### {{ r.req_id }}
+
+{{ r.text | sentence }}
+
+*Imposed by.* {{ r.source }}
+
+{% endfor %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

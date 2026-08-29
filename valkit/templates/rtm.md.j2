@@ -1,0 +1,31 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This matrix traces every requirement to the risk that motivates it, the test
+that verifies it, the run that executed the test and the evidence that run
+produced. Gaps are shown as prominently as coverage: the section listing
+requirements with no verifying test is always present, because an absent heading
+looks like an absent question.
+
+{{ rtm_markdown }}
+
+{% if trace_validation is not none %}
+## Traceability findings
+
+{% if trace_validation.findings %}
+{% for f in trace_validation.findings %}
+- **{{ f.severity | upper }}** ({{ f.kind }}): {{ f.message }}
+{% endfor %}
+
+{% if trace_validation.blocking %}
+{{ trace_validation.blocking | length }} finding(s) block completion of the
+validation package.
+{% endif %}
+{% else %}
+No traceability findings. Every requirement is linked to a test, every risk to a
+control, every executed test to its evidence.
+{% endif %}
+{% endif %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

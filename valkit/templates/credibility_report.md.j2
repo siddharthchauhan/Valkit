@@ -1,0 +1,152 @@
+{% include '_header.md.j2' %}
+
+This report follows the seven-step credibility assessment framework set out in
+FDA's January 2025 draft guidance *Considerations for the Use of Artificial
+Intelligence to Support Regulatory Decision-Making for Drug and Biological
+Products*. **That guidance is a draft and has not been finalised.** The framework
+is applied here because it is a defensible way to structure the argument, not
+because compliance with it is currently required. The final standards this
+package is built against are stated in the validation plan.
+
+## Step 1 — Question of interest
+
+{{ context_of_use.question_of_interest | sentence }}
+
+## Step 2 — Context of use
+
+{{ context_of_use.role | sentence }}
+
+| | |
+| --- | --- |
+| Human reviews every output | {{ context_of_use.human_in_the_loop | yes_no }} |
+| Patient safety impact | {{ context_of_use.patient_safety_impact | yes_no }} |
+| Regulatory impact | {{ context_of_use.regulatory_impact | risk_badge }} |
+
+**In scope**
+
+{{ intended_use.in_scope | bullets }}
+
+**Out of scope**
+
+{{ intended_use.out_of_scope | bullets }}
+
+## Step 3 — Model risk
+
+Model risk is the combination of the influence of the agent's output on the
+decision and the consequence of that decision being wrong.
+
+| | |
+| --- | --- |
+| Model influence | {{ assessment.model_influence | risk_badge }} |
+| Decision consequence | {{ assessment.decision_consequence | risk_badge }} |
+| **Model risk** | **{{ assessment.risk_class | risk_badge }}** |
+
+{{ assessment.rationale }}
+
+## Step 4 — Credibility assessment plan
+
+The plan below was fixed before execution. Its rigour follows from the model
+risk determined in step 3.
+
+{% for m in metrics %}
+- **{{ m.name }}**: {% if m.max_count is not none %}no more than {{ m.max_count }} occurrence(s){% elif m.baseline is not none %}non-inferiority to {{ m.baseline | proportion }} within {{ m.margin | proportion }}{% else %}one-sided {{ m.confidence | percent(0) }} {{ m.method.value | replace('_lower','') | replace('_','-') }} lower bound at or above {{ m.target | proportion }}{% endif %}{% if not m.critical %} (advisory){% endif %}.
+{% endfor %}
+{% if acceptance.judge_calibration %}
+- **Judge calibration**: Cohen's kappa at or above {{ acceptance.judge_calibration.min_cohen_kappa }} over at least {{ acceptance.judge_calibration.min_samples }} human-labelled cases.
+{% endif %}
+
+{% if dataset_summary %}
+The qualification set comprises {{ dataset_summary.n }} cases across
+{{ dataset_summary.strata | length }} strata, of which {{ dataset_summary.labelled }}
+carry a human label.
+
+{% if dataset_summary.notes %}
+{{ dataset_summary.notes | bullets }}
+{% endif %}
+
+The statistical argument assumes the cases are independent and representative of
+the intended use. That assumption rests on the curation of the set rather than
+on the arithmetic, so the composition is stated here for the reader to judge.
+{% endif %}
+
+## Step 5 — Execution
+
+| | |
+| --- | --- |
+| Run | {{ run.run_id }} |
+| Status | {{ run.status.value }} |
+| Started | {{ run.started_at }} |
+| Finished | {{ run.finished_at }} |
+| Model | `{{ run.model }}` |
+| Seed | {{ run.seed if run.seed is not none else 'Not pinned' }} |
+| Qualification set | `{{ run.dataset_ref }}` |
+| Dataset digest | `{{ run.dataset_sha256 | digest(24) }}` |
+| Harness | {{ run.harness.name }} {{ run.harness.version }} |
+| Harness configuration digest | `{{ run.harness.config_sha256 | digest(24) }}` |
+| Cases executed | {{ run.samples | length }} |
+
+## Step 6 — Results and deviations
+
+| Criterion | Observed | Bound | Target | Outcome |
+| --- | --- | --- | --- | --- |
+{% for m in metric_results %}
+| {{ m.name }}{% if not m.critical %} (advisory){% endif %} | k={{ m.k }}/{{ m.n }}, p-hat={{ m.point_estimate | proportion }} | {{ m.lower_bound | proportion if m.lower_bound is not none else 'not applicable' }} | {{ m.target | proportion if m.target is not none else '—' }} | **{{ m.passed | verdict }}** |
+{% endfor %}
+
+{% for m in metric_results %}
+{{ m.rationale }}
+
+{% endfor %}
+{% if calibration %}
+**Judge calibration.** Cohen's kappa {{ calibration.cohen_kappa | proportion(3) }}
+over {{ calibration.n }} labelled case(s) against a required minimum of
+{{ calibration.min_required | proportion(2) }}: **{{ calibration.passed | verdict }}**.
+{{ calibration.note }}
+{% endif %}
+
+**Deviations.**
+
+{% if deviations %}
+{% for d in deviations %}
+- **{{ d.deviation_id }}** ({{ d.severity | risk_badge }}) against {{ d.test_id }}: {{ d.description | sentence }} {% if d.disposition %}Disposition: {{ d.disposition | sentence }}{% endif %}{% if d.capa_ref %} CAPA reference: {{ d.capa_ref }}.{% endif %}
+{% endfor %}
+{% else %}
+No deviations were recorded.
+{% endif %}
+
+## Step 7 — Adequacy for the context of use
+
+{% if critical_metrics_passed and (calibration is none or calibration.passed) %}
+Every critical acceptance criterion was met, {% if calibration %}the judge used to
+grade outputs agrees with human assessment above the required threshold, {% endif %}and
+the evidence is retained and verifiable.
+
+**The model is adequate for the context of use stated in step 2**, subject to the
+limitations below and to the controls the context of use depends on remaining in
+place — in particular
+{% if context_of_use.human_in_the_loop %}the review of every output by a qualified
+human before it is used{% else %}the monitoring and change-control arrangements set
+out in the validation plan{% endif %}.
+{% else %}
+Not every critical acceptance criterion was met.
+
+**The model is not adequate for the context of use stated in step 2** on this
+evidence. The criteria that were not met are listed in step 6, and the agent
+cannot be released for this context of use until they are met or the context of
+use is narrowed and the assessment repeated.
+{% endif %}
+
+**Limitations carried forward.**
+
+{% if intended_use.limitations %}
+{{ intended_use.limitations | bullets }}
+{% else %}
+No limitations beyond the declared scope were recorded.
+{% endif %}
+
+**Outside the assessed scope.**
+
+{{ intended_use.out_of_scope | bullets('No exclusions were declared.') }}
+{% include '_evidence.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

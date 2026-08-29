@@ -1,0 +1,15 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This protocol covers the controls that exist only in the live workflow: human review, scheduled re-evaluation, drift detection and periodic review. These are the controls a validation package most often asserts and least often tests, so several are unscripted and are executed against real operation rather than a fixture.
+
+## 2. Tests
+
+{% set phase_tests = pq_tests %}
+{% if not phase_tests %}
+No performance qualification tests were derived for this agent.
+{% endif %}
+{% include '_protocol_body.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

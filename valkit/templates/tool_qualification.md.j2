@@ -1,0 +1,88 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This document answers the question every quality function asks of a validation
+tool: **who validates the validator?**
+
+ValKit produces evidence and documents that support a regulated decision. It is
+therefore itself software used in a GxP process, and a customer relying on its
+output needs to know what assurance stands behind it and what remains theirs.
+
+## 2. Categorisation
+
+Under GAMP 5 second edition, ValKit as deployed is **category 4 (configured)**:
+the customer supplies a specification, datasets, acceptance criteria and
+scorers, but does not alter the tool's logic. Where a customer writes a custom
+scorer or provider, that component is **category 5 (bespoke)** and is theirs to
+qualify; the extension points are deliberately narrow so that the boundary is
+easy to draw.
+
+The agents ValKit evaluates are separately categorised, and are typically
+category 5.
+
+## 3. What ValKit does and does not do
+
+**It does.** Execute a declared evaluation battery reproducibly; compute
+confidence bounds by documented methods; record evidence immutably; maintain a
+verifiable audit trail; apply Part 11 electronic signatures; and generate the
+documents in this package from those records.
+
+**It does not.** Make anyone compliant. Determine the context of use or the
+model risk — it applies rules to what the customer declares. Curate the
+qualification set, which is where the statistical argument is actually earned.
+Replace the critical thinking GAMP 5 requires, or the judgement of a qualified
+reviewer. Ship a validated agent: it validates the agent the customer supplies.
+
+## 4. Assurance ValKit ships
+
+| Control | Form |
+| --- | --- |
+| Numerical core | Pure Python, no third-party numerical library, verifiable by inspection |
+| Statistical methods | Checked against independently derived reference values |
+| Evidence integrity | Content-addressed storage; the identifier is the digest |
+| Audit trail | Hash-chained, append-only, with a documented digest schema |
+| Electronic signatures | 21 CFR 11.50, 11.70 and 11.200 implemented clause by clause |
+| Reproducibility | A run repeated with the same inputs produces byte-identical output |
+| Test suite | Executed on every change, including tamper-detection tests |
+
+## 5. Dependency inventory
+
+The core package depends on two third-party libraries, deliberately: in a GxP
+tool every dependency is a supplier that has to be assessed.
+
+| Dependency | Purpose | Assessment |
+| --- | --- | --- |
+| PyYAML | Parsing the specification | Widely used, stable interface, no network access |
+| Jinja2 | Rendering documents from templates | Widely used, sandboxed rendering, no network access |
+
+Optional extras (FastAPI, boto3, python-docx, the MCP SDK) are imported lazily
+and are not required for the core validation workflow. A deployment that does
+not install them does not carry their supplier risk.
+
+## 6. Installation qualification of ValKit itself
+
+A customer installing ValKit should record: the version installed and its
+digest; the Python version and platform; the output of the test suite; and the
+result of the self-check that verifies the audit chain and evidence vault. The
+`valkit verify` command performs the last of these against a deployment.
+
+## 7. Residual responsibilities
+
+These remain the customer's and cannot be delegated to the tool:
+
+- Determining the context of use and whether the risk classification is right.
+- Curating a qualification set that is representative and independent.
+- Deciding whether the acceptance criteria are appropriate to the decision.
+- Reviewing generated documents on their merits before signing them.
+- Operating the quality system: SOPs, training, account governance, periodic
+  review, and the predicate-rule compliance that Part 11 sits on top of.
+- Determining the applicability of any regulation to their own use.
+
+## 8. Naming
+
+"ValKit" is a working name used during development. An unrelated operating
+company uses the domain valkit.ai; the name must change before any public
+release.
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

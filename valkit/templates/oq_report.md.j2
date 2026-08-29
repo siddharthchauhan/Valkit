@@ -1,0 +1,82 @@
+{% include '_header.md.j2' %}
+
+## 1. Purpose
+
+This report records the execution of the operational qualification and the
+acceptance decision for each criterion.
+
+## 2. Acceptance results
+
+Acceptance is decided on a one-sided lower confidence bound. The observed pass
+rate describes the sample; the bound is what the sample supports as a claim
+about the agent, and is the figure the decision rests on.
+
+A case that failed to execute is excluded from the denominator and reported
+separately rather than being counted either way: treating an execution failure
+as an agent failure would understate the agent, and dropping it silently would
+overstate the evidence base.
+
+| Criterion | Observed | Bound | Target | Method | Outcome |
+| --- | --- | --- | --- | --- | --- |
+{% for m in metric_results %}
+| {{ m.name }}{% if not m.critical %} (advisory){% endif %} | k={{ m.k }}/{{ m.n }}, p-hat={{ m.point_estimate | proportion }} | {{ m.lower_bound | proportion if m.lower_bound is not none else 'not applicable' }} | {{ m.target | proportion if m.target is not none else '—' }} | {{ m.method.value | replace('_lower','') | replace('_','-') }} at {{ m.confidence | percent(0) }} | **{{ m.passed | verdict }}** |
+{% endfor %}
+
+{% for m in metric_results %}
+### {{ m.name }}
+
+{{ m.rationale }}
+
+{% if m.failing_sample_ids %}
+Failing cases: {{ m.failing_sample_ids | join(', ') }}.
+{% endif %}
+{% if m.strata %}
+
+Breakdown by stratum. A criterion that passes overall can conceal a stratum that
+fails, which is why the breakdown is stated rather than summarised.
+
+| Stratum | Cases | Passes | Observed | Bound |
+| --- | --- | --- | --- | --- |
+{% for s in m.strata %}
+| {{ s.key }}={{ s.value }} | {{ s.n }} | {{ s.k }} | {{ s.point_estimate | proportion }} | {{ s.lower_bound | proportion if s.lower_bound is not none else '—' }} |
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+{% if calibration %}
+## 3. Judge calibration
+
+A model used to grade outputs is a measuring instrument, and its verdicts are
+evidence only to the extent that its agreement with human assessment supports
+them.
+
+| | |
+| --- | --- |
+| Judge model | `{{ calibration.judge_model }}` |
+| Labelled cases compared | {{ calibration.n }} |
+| Cohen's kappa | {{ calibration.cohen_kappa | proportion(3) }} |
+| Required minimum | {{ calibration.min_required | proportion(2) }} |
+| Percent agreement | {{ calibration.percent_agreement | percent }} |
+| Outcome | **{{ calibration.passed | verdict }}** |
+
+{% if calibration.confusion %}
+| Judge passed | Judge failed | |
+| --- | --- | --- |
+| {{ calibration.confusion.tp }} | {{ calibration.confusion.fn }} | Human passed |
+| {{ calibration.confusion.fp }} | {{ calibration.confusion.tn }} | Human failed |
+
+A false pass — the judge accepting a case the human rejected — is the
+consequential direction of error, since it admits a defect into a signed report.
+{% endif %}
+
+{{ calibration.note }}
+{% endif %}
+
+## 4. Test results
+
+{% set phase_tests = oq_tests %}
+{% include '_report_body.md.j2' %}
+{% include '_evidence.md.j2' %}
+{% include '_approvals.md.j2' %}
+{% include '_footer.md.j2' %}

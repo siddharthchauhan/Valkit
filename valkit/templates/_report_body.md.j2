@@ -1,0 +1,50 @@
+{% for t in phase_tests %}
+{% set ex = ctx.execution_for(t.test_id) %}
+### {{ t.test_id }} — {{ t.title }}
+
+**Objective.** {{ t.objective | sentence }}
+
+**Verifies.** {{ t.requirement_ids | join(', ') or 'Not linked' }}
+
+**Acceptance criteria.** {{ t.acceptance_text | sentence }}
+
+{% if ex %}
+**Observed result.** {{ ex.observed_result | sentence or 'Recorded in the referenced run.' }}
+
+| | |
+| --- | --- |
+| Outcome | **{{ ex.passed | verdict }}** |
+| Executed | {{ ex.executed_at }} |
+| Executed by | {{ ex.executed_by or 'ValKit evaluation harness' }} |
+| Run | {{ ex.run_id }} |
+{% if ex.harness %}
+| Harness | {{ ex.harness.name }} {{ ex.harness.version }} |
+| Harness configuration digest | `{{ ex.harness.config_sha256 | digest(16) }}` |
+{% endif %}
+| Evidence | {% for ref in ex.evidence_refs %}`{{ ref | digest }}` {% else %}None recorded{% endfor %} |
+
+{% if ex.deviations %}
+**Deviations**
+
+{% for d in ex.deviations %}
+- **{{ d.deviation_id }}** ({{ d.severity | risk_badge }}): {{ d.description | sentence }}
+  {% if d.sample_ids %}Affected cases: {{ d.sample_ids | join(', ') }}.{% endif %}
+  {% if d.disposition %}Disposition: {{ d.disposition | sentence }}{% endif %}
+{% endfor %}
+{% else %}
+**Deviations.** None.
+{% endif %}
+{% else %}
+**Observed result.** This test was not executed. The requirement it verifies is
+therefore not demonstrated.
+
+| | |
+| --- | --- |
+| Outcome | **NOT EXECUTED** |
+{% endif %}
+
+| Reviewed by | | Date (UTC) | |
+| --- | --- | --- | --- |
+| | | | |
+
+{% endfor %}
