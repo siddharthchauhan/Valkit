@@ -57,8 +57,6 @@ from ..models import (
 )
 from ..util import Clock, SystemClock, canonical_json, parse_utc, sha256_text
 from .identity import (
-    COMPONENT_PASSWORD,
-    COMPONENT_USER_ID,
     PERSONAL_COMPONENTS,
     IdentityStore,
     SignerIdentity,

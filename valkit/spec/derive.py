@@ -594,7 +594,6 @@ def derive_tests(
     purpose_ids = req_ids(lambda r: r.source == "context_of_use.question_of_interest")
     scope_ids = req_ids(lambda r: "shall not be used for" in r.text)
     review_ids = req_ids(lambda r: "human reviewer" in r.text)
-    functional_ids = req_ids(lambda r: r.kind is RequirementKind.FUNCTIONAL)
 
     def risk_ids(*categories: str) -> list[str]:
         return [r.risk_id for r in risks if r.category in categories]

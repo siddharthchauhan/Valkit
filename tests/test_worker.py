@@ -18,7 +18,6 @@ from valkit.worker import (
     EXIT_OK,
     EXIT_USAGE,
     AgentWork,
-    Worker,
     WorkerResult,
     build_worker,
     main,

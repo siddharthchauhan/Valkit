@@ -7,7 +7,6 @@ signing credential is never accepted on the command line.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -274,17 +273,19 @@ class TestSigningCredentials:
     """A password must never be accepted on the command line."""
 
     def test_no_subcommand_accepts_a_password_argument(self):
+        """argv lands in shell history and is visible in the process table."""
         parser = build_parser()
-        rendered = parser.format_help()
+
+        def options_of(p) -> set[str]:
+            return {opt for action in p._actions for opt in action.option_strings}
+
+        forbidden = {"--password", "--secret", "--token", "--credential", "--otp"}
+        assert options_of(parser) & forbidden == set(), "top-level parser"
+
         subparsers = [a for a in parser._actions if hasattr(a, "choices") and a.choices][-1]
+        assert subparsers.choices, "no subcommands were found to check"
         for name, sub in subparsers.choices.items():
-            options = {
-                option
-                for action in sub._actions
-                for option in action.option_strings
-            }
-            assert "--password" not in options, name
-            assert "--secret" not in options, name
+            assert options_of(sub) & forbidden == set(), name
 
     def test_non_interactive_signing_without_the_environment_is_refused(
         self, capsys, workdir, monkeypatch

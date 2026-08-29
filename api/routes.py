@@ -28,8 +28,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 
-from valkit.errors import IntegrityError, SpecError, ValKitError
-from valkit.models import DocumentType
+from valkit.errors import ValKitError
 from valkit.spec.derive import derive_all
 from valkit.spec.loader import parse_spec
 
