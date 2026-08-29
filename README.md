@@ -269,6 +269,7 @@ output.
 - [docs/validating-valkit.md](docs/validating-valkit.md) — who validates the validator
 - [docs/data-protection.md](docs/data-protection.md) — PHI, tenancy, retention
 - [infra/](infra/) — deployment
+- [ci/](ci/) — continuous integration
 
 ## Licence
 
