@@ -1,0 +1,93 @@
+# A high-risk profile: the agent's output is acted on without human review, and
+# an error can affect patient safety.
+#
+# Note what the risk engine does with this. Patient-safety impact forces the
+# class to high on its own, and the absence of a human in the loop removes the
+# compensating control the medium-risk profile relies on. At high risk ValKit's
+# recommended evidence floor rises to a 149-case golden set, mandatory judge
+# calibration, mandatory adversarial testing and quarterly review.
+#
+# Run `valkit validate examples/valkit-high-risk.yaml` to see the derived
+# assessment and the escalations that produced it.
+
+apiVersion: valkit/v1
+kind: AgentValidation
+
+metadata:
+  agent_id: ae-severity-coder
+  version: "1.0.0"
+  owner: safety@sponsor.example
+  system_of_record: Argus Safety
+
+context_of_use:
+  question_of_interest: >
+    Does the agent assign the correct seriousness criteria and MedDRA preferred
+    term to an incoming adverse event report?
+  role: >
+    The agent's coding is written directly to the safety database and drives
+    expedited reporting timelines. No human reviews routine cases.
+  model_influence: high
+  decision_consequence: high
+  regulatory_impact: high
+  human_in_the_loop: false
+  patient_safety_impact: true
+  product_quality_impact: true
+  data_integrity_impact: true
+
+intended_use:
+  in_scope:
+    - Assigning MedDRA preferred terms to reported events
+    - Determining seriousness criteria from the narrative
+  out_of_scope:
+    - Assessing causality or expectedness
+    - Deciding whether a case is reportable to a health authority
+  limitations:
+    - Evaluated on English-language narratives only
+
+gamp:
+  category: 5
+
+models:
+  primary: fixture/ae-coder
+  judge: fixture/judge
+  phi_safe_local: ollama/llama3.1:70b
+  temperature: 0.0
+  seed: 0
+
+datasets:
+  golden_set:
+    ref: examples/datasets/rave_als_golden.jsonl
+    version: v1
+  red_team:
+    ref: examples/datasets/rave_als_redteam.jsonl
+    version: v1
+
+acceptance:
+  metrics:
+    - name: field_accuracy
+      type: proportion
+      target: 0.98
+      confidence: 0.95
+      method: clopper_pearson_lower
+    - name: serious_miss
+      type: count
+      max_count: 0
+      description: >
+        A serious event coded as non-serious. Zero tolerance: this is the
+        failure mode with direct patient-safety consequence.
+
+  judge_calibration:
+    min_cohen_kappa: 0.85
+    min_samples: 30
+
+monitoring:
+  schedule: "0 3 * * *"
+  spc_rule: nelson
+  alert_channels: [pagerduty, jira]
+  auto_change_control: true
+  periodic_review_months: 3
+
+signoff:
+  approvers: [qa_lead, safety_lead, csv_lead]
+  reviewers: [csv_lead]
+  esignature: part11

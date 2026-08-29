@@ -1,0 +1,164 @@
+# ValKit specification for an EDC build-support agent.
+#
+# This file is the contract between the team that builds the agent and the
+# quality function that has to sign off on it. Everything ValKit generates -
+# the requirements, the risk assessment, the IQ/OQ/PQ protocols, the
+# credibility assessment and the validation summary - is derived from what is
+# declared here, so it is worth writing carefully and reviewing as a controlled
+# document in its own right.
+#
+# Run `valkit validate examples/valkit.yaml` to check it and see the derived
+# risk assessment before executing anything.
+
+apiVersion: valkit/v1
+kind: AgentValidation
+
+metadata:
+  agent_id: rave-als-generator
+  version: 2.3.1
+  owner: fde@sponsor.example
+  system_of_record: Medidata Rave EDC
+  description: >
+    Generates Archival Listing Specification (ALS) entries and suggests edit
+    checks from an approved study protocol, for review by an EDC build engineer.
+
+# Steps 1 and 2 of the FDA credibility framework. The question of interest is
+# what the agent's output helps answer; the role says how the output is used and
+# by whom. Together with the two risk axes below, this block determines how much
+# evidence ValKit will require.
+context_of_use:
+  question_of_interest: >
+    Does the agent correctly generate Archival Listing Specification (ALS)
+    entries from a study protocol so that the EDC build is accurate?
+  role: >
+    Assistive. Every generated ALS entry is reviewed and accepted by a qualified
+    EDC build engineer against the source protocol before it is loaded. The agent
+    never writes to a production database.
+
+  # How much the agent's output drives the decision, and how bad it is if the
+  # decision is wrong. These are the two axes of the model risk matrix.
+  model_influence: medium
+  decision_consequence: medium
+
+  regulatory_impact: medium
+  human_in_the_loop: true
+  patient_safety_impact: false
+  product_quality_impact: false
+  data_integrity_impact: true
+
+# What the agent is and is not for. Out-of-scope entries become explicit negative
+# requirements, so out-of-scope use is a testable failure rather than an
+# unwritten assumption.
+intended_use:
+  in_scope:
+    - Generating ALS field and form definitions from protocol text
+    - Suggesting edit checks for generated fields
+  out_of_scope:
+    - Loading an ALS into a production EDC environment without human review
+    - Interpreting protocol sections for clinical or medical judgement
+    - Generating or modifying subject data
+  users:
+    - EDC build engineer
+    - Clinical data manager
+  limitations:
+    - Validated against oncology and cardiology protocols only
+    - Not evaluated on protocols with adaptive randomisation
+
+gamp:
+  # Category 5: the agent's behaviour comes from prompts, tools and a model
+  # configuration specific to this use, so there is no supplier assurance to
+  # lean on and no installed base.
+  category: 5
+  rationale: >
+    Bespoke agent logic over a third-party foundation model. The model is a
+    supplier component; the prompt, tool surface and acceptance criteria are
+    bespoke.
+
+models:
+  # The demonstration runs entirely offline against a deterministic fixture
+  # provider. Replace with a real provider (for example
+  # bedrock/anthropic.claude-sonnet-4) for a live run.
+  primary: fixture/rave-als
+  judge: fixture/judge
+
+  # Samples flagged as containing PHI are routed here. If PHI-flagged samples
+  # exist and no local provider is configured, evaluation refuses to run rather
+  # than sending them to a hosted endpoint.
+  phi_safe_local: ollama/llama3.1:70b
+
+  # Temperature zero and a pinned seed are what make a qualification run
+  # repeatable. A non-zero temperature produces a warning at load time.
+  temperature: 0.0
+  seed: 0
+
+datasets:
+  golden_set:
+    ref: examples/datasets/rave_als_golden.jsonl
+    version: v7
+    description: >
+      Curated ALS generation cases stratified by form type, with a human-labelled
+      subset used to calibrate the judge.
+  red_team:
+    ref: examples/datasets/rave_als_redteam.jsonl
+    version: v3
+    description: >
+      Prompt injection, out-of-scope requests, PHI elicitation and fabrication
+      bait.
+
+acceptance:
+  metrics:
+    # A one-sided lower confidence bound, not the observed rate. Demonstrating
+    # 0.95 at 95% confidence needs at least 59 flawless cases; 0.98 needs 149.
+    # Run `valkit sample-size --target 0.98` to size a golden set before
+    # committing to a target.
+    - name: field_accuracy
+      type: proportion
+      target: 0.95
+      confidence: 0.95
+      method: clopper_pearson_lower
+      strata: [form]
+      description: Generated ALS field definitions match the reference exactly.
+
+    - name: citation_accuracy
+      type: proportion
+      target: 0.95
+      confidence: 0.95
+      method: wilson_lower
+      description: >
+        Every generated entry cites a protocol section that actually contains the
+        supporting text. This is the control against fabricated citations.
+
+    - name: edit_check_precision
+      type: proportion
+      target: 0.90
+      confidence: 0.95
+      method: wilson_lower
+      critical: false
+      description: >
+        Suggested edit checks are appropriate. Advisory: a weak suggestion is
+        corrected by the reviewer and does not by itself block release.
+
+  judge_calibration:
+    # An LLM judge is an unvalidated measuring instrument until its agreement
+    # with human assessment is quantified. Below this threshold, sign-off is
+    # blocked.
+    min_cohen_kappa: 0.80
+    min_samples: 20
+    required: true
+
+monitoring:
+  # A model provider can change behaviour without anything changing on your
+  # side, so a validated status with no monitoring decays silently.
+  schedule: "0 6 * * 1"
+  spc_rule: western_electric
+  window: 20
+  alert_channels: [slack, jira]
+  auto_change_control: true
+  periodic_review_months: 6
+
+signoff:
+  approvers: [qa_lead, csv_lead]
+  reviewers: [csv_lead]
+  esignature: part11
+  # The author of a validation document may not also approve it.
+  require_distinct_signers: true

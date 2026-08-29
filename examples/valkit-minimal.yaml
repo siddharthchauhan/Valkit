@@ -1,0 +1,35 @@
+# The smallest specification ValKit will accept.
+#
+# Every block omitted here takes a default, and `valkit validate` will warn
+# about the ones that weaken the resulting package - most importantly the
+# unpinned golden set, which means the run cannot be proven reproducible.
+
+apiVersion: valkit/v1
+kind: AgentValidation
+
+metadata:
+  agent_id: protocol-qa
+  version: "0.1.0"
+  owner: platform@sponsor.example
+
+context_of_use:
+  question_of_interest: Does the agent answer protocol questions with a correct citation?
+  role: Assistive; a study manager reads the answer and checks the citation.
+  model_influence: low
+  decision_consequence: low
+
+models:
+  primary: fixture/protocol-qa
+
+datasets:
+  golden_set: examples/datasets/rave_als_golden.jsonl
+
+acceptance:
+  metrics:
+    - name: citation_accuracy
+      target: 0.90
+      confidence: 0.95
+      method: wilson_lower
+
+signoff:
+  approvers: [qa_lead]
