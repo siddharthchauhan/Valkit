@@ -490,15 +490,42 @@ class TraceabilityGraph:
         executed = {
             link.target_id for link in self._links if link.relation == "executes"
         }
-        never_run = [t.node_id for t in self.nodes_of("test") if t.node_id not in executed]
-        if never_run:
+        # An unscripted test verifies a control that only exists once the system
+        # is in operation - that a reviewer actually reviews, that the schedule
+        # actually fires, that periodic review actually happens. Those cannot be
+        # demonstrated before operation, so their absence is an outstanding
+        # condition to state, not an omission to fail the package for. A
+        # scripted test that was never executed is an omission.
+        never_run_scripted = sorted(
+            t.node_id
+            for t in self.nodes_of("test")
+            if t.node_id not in executed and t.attributes.get("scripted", True)
+        )
+        never_run_unscripted = sorted(
+            t.node_id
+            for t in self.nodes_of("test")
+            if t.node_id not in executed and not t.attributes.get("scripted", True)
+        )
+        if never_run_scripted:
             findings.append(
                 TraceFinding(
                     "test_not_executed",
                     "blocking",
-                    f"{len(never_run)} test(s) were never executed: "
-                    f"{', '.join(sorted(never_run))}.",
-                    sorted(never_run),
+                    f"{len(never_run_scripted)} scripted test(s) were never executed: "
+                    f"{', '.join(never_run_scripted)}.",
+                    never_run_scripted,
+                )
+            )
+        if never_run_unscripted:
+            findings.append(
+                TraceFinding(
+                    "unscripted_test_pending",
+                    "advisory",
+                    f"{len(never_run_unscripted)} unscripted test(s) remain to be performed "
+                    f"against live operation: {', '.join(never_run_unscripted)}. These "
+                    f"verify controls that cannot be demonstrated before the system is in "
+                    f"use, and validated status is conditional on completing them.",
+                    never_run_unscripted,
                 )
             )
 

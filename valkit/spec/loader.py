@@ -839,23 +839,31 @@ def load_spec_from_string(
     return parse_spec(text, source, strict=strict).spec
 
 
-def load_spec(path: str | os.PathLike[str], *, strict: bool = True) -> AgentSpec:
-    """Load and validate a specification from a file."""
+def _read_spec_file(path: str | os.PathLike[str]) -> str:
+    """Read a specification file, reporting failures as SpecError.
+
+    Shared by both entry points so that a missing file produces the same clear
+    message whichever one the caller used.
+    """
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            text = handle.read()
+            return handle.read()
     except FileNotFoundError as error:
         raise SpecError(f"file not found: {path}", path=str(path)) from error
+    except UnicodeDecodeError as error:
+        raise SpecError(f"is not valid UTF-8: {error}", path=str(path)) from error
     except OSError as error:
         raise SpecError(f"could not be read: {error}", path=str(path)) from error
-    return parse_spec(text, str(path), strict=strict).spec
+
+
+def load_spec(path: str | os.PathLike[str], *, strict: bool = True) -> AgentSpec:
+    """Load and validate a specification from a file."""
+    return parse_spec(_read_spec_file(path), str(path), strict=strict).spec
 
 
 def load_spec_result(path: str | os.PathLike[str], *, strict: bool = True) -> SpecLoadResult:
     """Load a specification from a file, keeping the warnings."""
-    with open(path, "r", encoding="utf-8") as handle:
-        text = handle.read()
-    return parse_spec(text, str(path), strict=strict)
+    return parse_spec(_read_spec_file(path), str(path), strict=strict)
 
 
 # --------------------------------------------------------------------------

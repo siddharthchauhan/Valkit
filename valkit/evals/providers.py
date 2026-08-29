@@ -209,9 +209,24 @@ class FixtureJudgeProvider:
         *,
         model: str = "fixture/judge",
         disagree_for: set[str] | None = None,
+        disagree_every: int | None = None,
     ):
         self._model = model
         self._disagree = set(disagree_for or ())
+        # A judge that agrees with the reference on every case would report a
+        # Cohen's kappa of 1.0, which is precisely the degenerate result this
+        # class exists to avoid: it tells a reader nothing about how the judge
+        # behaves where no reference is available. So by default it disagrees on
+        # a deterministic fraction of cases, selected by a hash of the sample
+        # identifier so the choice is stable across runs and machines.
+        #
+        # Naming specific cases in disagree_for turns the rate off, because a
+        # caller who has said exactly where the judge should differ means those
+        # cases and not those plus a background rate. Pass disagree_every
+        # explicitly to have both.
+        if disagree_every is None:
+            disagree_every = 0 if self._disagree else 20
+        self._disagree_every = disagree_every
 
     @property
     def identity(self) -> str:
@@ -221,7 +236,8 @@ class FixtureJudgeProvider:
         candidate = _section(prompt, "CANDIDATE:")
         reference = _section(prompt, "REFERENCE:")
         acceptable = bool(reference) and candidate.strip() == reference.strip()
-        if params.get("sample_id", "") in self._disagree:
+        sample_id = params.get("sample_id", "")
+        if sample_id in self._disagree or self._selected(sample_id):
             acceptable = not acceptable
 
         verdict = "ACCEPTABLE" if acceptable else "NOT ACCEPTABLE"
@@ -235,6 +251,13 @@ class FixtureJudgeProvider:
             model=self._model,
             raw={"fixture": True},
         )
+
+
+    def _selected(self, sample_id: str) -> bool:
+        if not self._disagree_every or not sample_id:
+            return False
+        digest = hashlib.sha256(sample_id.encode("utf-8")).digest()
+        return int.from_bytes(digest[:4], "big") % self._disagree_every == 0
 
 
 def _section(prompt: str, header: str) -> str:

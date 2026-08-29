@@ -505,8 +505,11 @@ class SignatureService:
             if signature.meaning is SignatureMeaning.AUTHORED
         }
         if signer_id in authored_by:
+            verb = {"approved": "approve", "reviewed": "review"}.get(
+                meaning.value, meaning.value
+            )
             raise AuthorizationError(
-                f"{signer_id!r} authored this document and may not also {meaning.value} it; "
+                f"{signer_id!r} authored this document and may not also {verb} it; "
                 "the specification requires distinct signers"
             )
 

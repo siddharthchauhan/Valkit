@@ -177,7 +177,10 @@ monitoring:
   periodic_review_months: 6
 
 signoff:
-  approvers: [qa_lead, csv_lead]
+  # The CSV lead prepares the package and the QA lead approves it. Listing both
+  # as approvers would make the package unsignable under the segregation rule
+  # below, since the author may not also approve.
+  approvers: [qa_lead]
   reviewers: [csv_lead]
   esignature: part11
   # The author of a validation document may not also approve it.

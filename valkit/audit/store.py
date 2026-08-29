@@ -116,6 +116,10 @@ class AuditTrail:
         # Serialises writers inside one process. Across processes the IMMEDIATE
         # transaction plus SQLite's own locking does the same job.
         self._lock = threading.Lock()
+        if self.path != ":memory:":
+            # Otherwise a missing directory surfaces as sqlite3's opaque
+            # "unable to open database file".
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.path, timeout=timeout, isolation_level=None)
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA journal_mode=WAL")
