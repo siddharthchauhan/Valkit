@@ -113,14 +113,25 @@ class AuditTrail:
     ):
         self.path = str(path)
         self._clock = clock or SystemClock()
-        # Serialises writers inside one process. Across processes the IMMEDIATE
-        # transaction plus SQLite's own locking does the same job.
-        self._lock = threading.Lock()
+        # Serialises every use of the connection inside one process, reads
+        # included. Across processes the IMMEDIATE transaction plus SQLite's own
+        # locking does the same job.
+        #
+        # It is re-entrant because verification and export call the read helpers
+        # while already holding it.
+        self._lock = threading.RLock()
         if self.path != ":memory:":
             # Otherwise a missing directory surfaces as sqlite3's opaque
             # "unable to open database file".
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(self.path, timeout=timeout, isolation_level=None)
+        # check_same_thread=False, because a server handles requests on a thread
+        # pool and would otherwise fail on the first read from a worker thread —
+        # a failure that would not appear in single-threaded use and so would
+        # first be seen in production. The lock above is what makes it safe;
+        # without it this flag would only move the race somewhere harder to see.
+        self._connection = sqlite3.connect(
+            self.path, timeout=timeout, isolation_level=None, check_same_thread=False
+        )
         self._connection.row_factory = sqlite3.Row
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute("PRAGMA foreign_keys=ON")
@@ -142,7 +153,8 @@ class AuditTrail:
             )
 
     def close(self) -> None:
-        self._connection.close()
+        with self._lock:
+            self._connection.close()
 
     def __enter__(self) -> "AuditTrail":
         return self
@@ -274,16 +286,21 @@ class AuditTrail:
         )
 
     def count(self) -> int:
-        return int(self._connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0])
+        with self._lock:
+            return int(self._connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0])
 
     def get(self, seq: int) -> AuditRecord | None:
-        row = self._connection.execute("SELECT * FROM audit_log WHERE seq = ?", (seq,)).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM audit_log WHERE seq = ?", (seq,)
+            ).fetchone()
         return self._to_record(row) if row else None
 
     def last(self) -> AuditRecord | None:
-        row = self._connection.execute(
-            "SELECT * FROM audit_log ORDER BY seq DESC LIMIT 1"
-        ).fetchone()
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM audit_log ORDER BY seq DESC LIMIT 1"
+            ).fetchone()
         return self._to_record(row) if row else None
 
     def records(self) -> list[AuditRecord]:
@@ -330,7 +347,9 @@ class AuditTrail:
             sql += " LIMIT -1 OFFSET ?"
             params.append(offset)
 
-        return [self._to_record(row) for row in self._connection.execute(sql, params)]
+        with self._lock:
+            rows = self._connection.execute(sql, params).fetchall()
+        return [self._to_record(row) for row in rows]
 
     def __iter__(self) -> Iterator[AuditRecord]:
         return iter(self.records())
@@ -362,7 +381,10 @@ class AuditTrail:
         checked = 0
         last_hash = GENESIS_HASH
 
-        for row in self._connection.execute("SELECT * FROM audit_log ORDER BY seq"):
+        with self._lock:
+            rows = self._connection.execute("SELECT * FROM audit_log ORDER BY seq").fetchall()
+
+        for row in rows:
             seq = row["seq"]
             if seq != expected_seq:
                 return ChainVerification(

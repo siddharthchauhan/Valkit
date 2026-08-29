@@ -191,6 +191,27 @@ class SignatureService:
             {"signings": session.signing_count},
         )
 
+    def session(self, session_id: str, user_id: str) -> SigningSession:
+        """Look up an open session belonging to ``user_id``.
+
+        The owner is a parameter rather than something the caller asserts
+        afterwards, because a session identifier travelling over a network is a
+        bearer token: without this check, knowing another individual's session
+        identifier would be enough to sign in their name, which is exactly what
+        11.200(a)(2) requires the system to prevent.
+        """
+        session = self._sessions.get(session_id)
+        if session is None or session.user_id != user_id:
+            raise AuthorizationError(
+                f"no open signing session {session_id!r} belongs to {user_id!r}"
+            )
+        if not session.is_live(self._clock.now_iso()):
+            raise AuthorizationError(
+                f"signing session {session_id!r} has lapsed. 21 CFR 11.200(a)(1)(ii) "
+                "requires all signature components outside a continuous session."
+            )
+        return session
+
     # -- signing -----------------------------------------------------------
 
     def sign(

@@ -95,9 +95,7 @@ def _build_pipeline(args: argparse.Namespace, spec):
     from .audit.store import AuditTrail
     from .esign.identity import StaticIdentityStore
     from .esign.signatures import SignatureService
-    from .evals.dataset import load_dataset
-    from .evals.providers import FixtureProvider, resolve_provider
-    from .evals.judge import LlmJudge
+    from .evals.providers import judge_for_spec, provider_for_spec
     from .pipeline import ValidationPipeline
     from .vault.store import EvidenceVault
 
@@ -107,30 +105,12 @@ def _build_pipeline(args: argparse.Namespace, spec):
 
     audit = AuditTrail(workspace / "audit.sqlite", clock)
     vault = EvidenceVault(workspace / "vault", clock)
-
-    provider = None
-    if spec.models.primary.startswith("fixture/") and spec.datasets.golden_set:
-        # A fixture provider needs the dataset to know which cases it should
-        # answer wrongly, so it is built from the dataset rather than the name.
-        try:
-            provider = FixtureProvider.from_dataset(
-                load_dataset(spec.datasets.golden_set.ref), model=spec.models.primary
-            )
-        except ValKitError:
-            provider = None
-    if provider is None:
-        provider = resolve_provider(spec.models.primary)
-
-    judge = None
-    if spec.models.judge:
-        judge = LlmJudge(provider=resolve_provider(spec.models.judge))
-
     identities = StaticIdentityStore(clock)
     signatures = SignatureService(identities, clock, audit)
 
     return ValidationPipeline(
-        provider=provider,
-        judge=judge,
+        provider=provider_for_spec(spec),
+        judge=judge_for_spec(spec),
         vault=vault,
         audit=audit,
         signatures=signatures,

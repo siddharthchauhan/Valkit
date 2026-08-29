@@ -236,6 +236,89 @@ building the agent rather than a separate project afterwards. Credentials passed
 to `valkit.sign` are never echoed in a tool result, since a tool result is model
 context and may be persisted in a transcript.
 
+The handlers are plain functions of a context object rather than methods on a
+server, so the surface can be tested without a transport and the registry does
+not depend on the MCP SDK. Arguments are checked against a JSON Schema subset
+before a handler runs, and a ValKit error becomes a structured result rather
+than a transport failure — a coding agent can act on `"the target must be less
+than 1"` and cannot act on a broken connection.
+
+## The four entry points, and what they share
+
+```mermaid
+graph TB
+  CLI[valkit CLI] --> Shared
+  API[HTTP API and console] --> Shared
+  MCP[MCP tools] --> Shared
+  Worker[Re-evaluation worker] --> Shared
+
+  subgraph Shared[Shared engine]
+    Providers["evals.providers.provider_for_spec"]
+    Pipeline["pipeline: stages, derive_executions, readiness"]
+    Stores[("audit + vault")]
+  end
+
+  Shared --> Package[Signed validation package]
+```
+
+Four ways in, one engine. That matters more than it looks: a qualification
+report generated through a tool call and one generated through the CLI have to
+be the same regulatory record, so the derivations that produce them —
+`provider_for_spec`, `derive_executions`, `readiness` — live in one place and
+every entry point calls them. If they could diverge, the evidence would depend
+on the route taken to produce it, which is exactly the property a validation
+package cannot have.
+
+The entry points differ only in what they are allowed to do:
+
+| | Runs a battery | Generates documents | Signs | Grants validated status |
+| --- | --- | --- | --- | --- |
+| CLI | yes | yes | yes, interactively | via the gate |
+| HTTP API | yes | yes | yes, one document at a time | via the gate |
+| MCP | yes | yes | yes, credential in the call | via the gate |
+| Worker | yes | no | **never** | **never** |
+
+The worker's row is the deliberate one. It produces evidence and opens change
+controls; it cannot sign and cannot restore validated status. A worker that
+could sign could grant validated status to an agent no human had looked at,
+which is the opposite of what the signature is for.
+
+## Monitoring and re-evaluation
+
+```mermaid
+sequenceDiagram
+  participant S as Scheduler (EventBridge or the loop)
+  participant W as Worker
+  participant A as Audit
+  participant V as Vault
+  participant M as Drift monitor
+  participant C as Change control
+
+  S->>W: pass
+  W->>A: verify chain
+  W->>V: verify evidence
+  alt either fails
+    W-->>S: exit 3, no evidence produced
+  else both intact
+    loop each specification
+      W->>W: due? (cron vs. last observation)
+      W->>W: run the battery
+      W->>M: record one point per metric
+      M->>M: control limits from history
+      alt a rule trips
+        M->>C: open a change control
+        M-->>W: alert
+      end
+      W->>A: monitoring.reevaluated
+    end
+    W-->>S: exit 1 if alerted, else 0
+  end
+```
+
+Integrity is checked before anything is produced, not alongside the results.
+Appending new evidence to a chain that does not verify would extend a record
+nobody can rely on, and the exit code is what the deployment's alarms watch.
+
 ## Decisions worth knowing
 
 **The core depends on PyYAML and Jinja2, and nothing else.** Every third-party

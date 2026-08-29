@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-from ..errors import ProviderError
+from ..errors import ProviderError, ValKitError
 
 __all__ = [
     "ProviderResponse",
@@ -39,6 +39,8 @@ __all__ = [
     "BedrockProvider",
     "OllamaProvider",
     "resolve_provider",
+    "provider_for_spec",
+    "judge_for_spec",
     "register_provider_scheme",
 ]
 
@@ -539,3 +541,53 @@ def resolve_provider(uri: str, registry: dict[str, ModelProvider] | None = None)
             f"{', '.join(sorted(_SCHEMES))}"
         )
     return factory(name)
+
+
+def provider_for_spec(spec: Any, *, base_dir: Any = None, dataset: Any = None) -> ModelProvider:
+    """The primary provider a specification asks for.
+
+    Only one rule sits on top of :func:`resolve_provider`, and it is the reason
+    this function exists rather than being written out at each call site: a
+    fixture provider has to be built from the golden set, because it takes its
+    answers — and which cases it should answer wrongly — from the expected
+    outputs in the data. Resolved from the model name alone it would answer
+    nothing correctly, and the demonstration it exists to support would report a
+    validated agent as failing.
+
+    Pass ``dataset`` when the caller has already loaded it, which avoids reading
+    and re-hashing the golden set twice.
+
+    Every entry point that runs a battery goes through here: the CLI, the HTTP
+    API, the MCP surface and the worker. What none of them do is substitute a
+    fixture for a model the specification named: a run recorded against
+    ``bedrock/...`` has to have talked to Bedrock, and a provider factory that
+    quietly fell back to fixtures would make a run record a fiction.
+    """
+    if not spec.models.primary.startswith("fixture/"):
+        return resolve_provider(spec.models.primary)
+
+    if dataset is None:
+        golden = getattr(getattr(spec, "datasets", None), "golden_set", None)
+        if golden is not None:
+            from .dataset import load_dataset
+
+            try:
+                dataset = load_dataset(golden.ref, base_dir=base_dir)
+            except ValKitError:
+                # Unreachable, or it fails its pinned digest. Fall through:
+                # loading it properly is the runner's job, and the runner
+                # reports the failure far better than a provider factory can.
+                dataset = None
+
+    if dataset is None:
+        return resolve_provider(spec.models.primary)
+    return FixtureProvider.from_dataset(dataset, model=spec.models.primary)
+
+
+def judge_for_spec(spec: Any) -> Any:
+    """The judge a specification asks for, or ``None`` if it names none."""
+    if not spec.models.judge:
+        return None
+    from .judge import LlmJudge
+
+    return LlmJudge(provider=resolve_provider(spec.models.judge))

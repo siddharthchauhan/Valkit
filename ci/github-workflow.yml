@@ -55,7 +55,10 @@ jobs:
               "valkit.stats", "valkit.spec", "valkit.evals", "valkit.audit",
               "valkit.vault", "valkit.esign", "valkit.docgen", "valkit.trace",
               "valkit.drift", "valkit.change", "valkit.pipeline", "valkit.cli",
-              "valkit.mcp",
+              "valkit.mcp", "valkit.worker",
+              # The api package itself must import without FastAPI installed;
+              # only api.main pulls it in.
+              "api",
           ]:
               importlib.import_module(name)
               print("ok", name)
@@ -66,6 +69,13 @@ jobs:
           python -m valkit.cli --version
           python -m valkit.cli validate examples/valkit.yaml
           python -m valkit.cli sample-size --target 0.98
+
+      - name: Run the worker
+        run: |
+          python -m valkit.worker --scheduled --workspace .valkit-ci examples/valkit.yaml
+          # Second pass: the schedule says it is not due, so nothing is re-run.
+          python -m valkit.worker --scheduled --workspace .valkit-ci examples/valkit.yaml \
+            | grep -q "not due"
 
   demo:
     name: Demonstration runs end to end
@@ -98,3 +108,52 @@ jobs:
         with:
           name: validation-package
           path: out/ci
+
+  api:
+    name: The API serves a validation end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[api,dev]'
+
+      # Starts the server the deployment actually names, rather than the
+      # in-process test client, so an ASGI entry point that only works under
+      # TestClient does not reach production.
+      - name: Serve and exercise
+        run: |
+          python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 &
+          for _ in $(seq 1 40); do
+            curl -sf http://127.0.0.1:8000/healthz > /dev/null && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:8000/healthz
+          curl -sf http://127.0.0.1:8000/readyz
+          curl -sf http://127.0.0.1:8000/openapi.json > /dev/null
+          curl -sf http://127.0.0.1:8000/api/v1/example-spec -o spec.yaml
+          python - <<'PY'
+          import json, pathlib, urllib.request
+
+          def post(path, body):
+              request = urllib.request.Request(
+                  f"http://127.0.0.1:8000{path}",
+                  data=json.dumps(body).encode(),
+                  headers={"Content-Type": "application/json", "X-ValKit-Actor": "ci"},
+              )
+              with urllib.request.urlopen(request) as response:
+                  return json.load(response)
+
+          post("/api/v1/specs", {"yaml": pathlib.Path("spec.yaml").read_text()})
+          result = post("/api/v1/validations", {"spec_ref": "rave-als-generator"})
+          types = {d["doc_type"] for d in result["documents"]}
+          assert {"URS", "OQ_REPORT", "CREDIBILITY_REPORT", "VSR"} <= types, types
+          # Unsigned, deliberately: the pipeline stops short of signing.
+          assert result["readiness"]["ready"] is False
+          print(len(result["documents"]), "documents;", result["status"])
+          PY

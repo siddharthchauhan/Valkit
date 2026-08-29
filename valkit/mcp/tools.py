@@ -268,7 +268,7 @@ def _ingest_spec(context: ValKitToolContext, arguments: dict[str, Any]) -> dict[
 
 def _run_evals(context: ValKitToolContext, arguments: dict[str, Any]) -> dict[str, Any]:
     from ..evals.dataset import load_dataset_detailed
-    from ..evals.providers import FixtureProvider
+    from ..evals.providers import judge_for_spec, provider_for_spec
     from ..evals.runner import EvalRunner
 
     spec = context.require_spec(arguments["agent_id"], arguments.get("version"))
@@ -286,10 +286,13 @@ def _run_evals(context: ValKitToolContext, arguments: dict[str, Any]) -> dict[st
         dataset_ref, expected_sha256=pinned, base_dir=context.base_dir
     )
 
-    provider = context.provider or FixtureProvider.from_dataset(loaded.dataset)
+    # Falling back to a fixture for a specification that named a hosted model
+    # would record a run against a model that was never called, so the fallback
+    # resolves what the specification asked for and fails loudly if it cannot.
+    provider = context.provider or provider_for_spec(spec, dataset=loaded.dataset)
     runner = EvalRunner(
         provider,
-        judge=context.judge,
+        judge=context.judge if context.judge is not None else judge_for_spec(spec),
         clock=context.clock,
         vault=context.vault,
         audit=context.audit,

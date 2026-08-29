@@ -70,6 +70,47 @@ usage error, `3` integrity failure. Integrity is separate from acceptance
 because "the evidence cannot be trusted" is a different conversation from "the
 agent did not meet its target".
 
+### From an HTTP API and a web console
+
+```bash
+pip install -e '.[api]'
+uvicorn api.main:app          # console on /, OpenAPI on /docs
+```
+
+The console walks the same path the CLI does — specification, run, acceptance,
+the validated gate, package, signature — and is meant for the validation and QA
+people who will not be running Python. Every POST requires an `X-ValKit-Actor`
+header and lands in the audit trail; there is no `PUT`, `PATCH` or `DELETE`
+anywhere in the API, because records are append-only.
+
+### From your own coding agent
+
+```bash
+pip install -e '.[mcp]'
+python -m valkit.mcp.server   # stdio
+```
+
+Seven MCP tools — `valkit.ingest_spec`, `run_evals`, `compute_acceptance`,
+`generate_docs`, `sign`, `get_drift`, `open_change_control` — so that producing
+evidence is part of building the agent rather than a separate project
+afterwards. Credentials passed to `valkit.sign` are never echoed in a tool
+result, since a tool result is model context and may be persisted in a
+transcript.
+
+### Keeping it validated
+
+```bash
+python -m valkit.worker --scheduled specs/    # one pass, for a scheduler
+python -m valkit.worker specs/                # or as a long-running service
+```
+
+Re-evaluates whatever the `monitoring.schedule` cron expressions say is due,
+feeds the results to the SPC charts, and opens a change control when a control
+rule trips. It verifies the audit chain and the evidence vault before it starts,
+and stops if either fails: producing new evidence on top of a broken chain would
+extend a record nobody can rely on. **It never signs anything** — a worker that
+could sign could grant validated status to an agent no human had looked at.
+
 ## The specification
 
 ```yaml
@@ -177,6 +218,11 @@ Full treatment in [docs/statistics.md](docs/statistics.md).
 | `valkit.vault` | Content-addressed immutable evidence, locally or on S3 Object Lock |
 | `valkit.esign` | 21 CFR Part 11 subpart C electronic signatures |
 | `valkit.pipeline` | The lifecycle, and the gate that decides validated status |
+| `valkit.drift` | SPC charts over re-evaluations; Western Electric and Nelson rules |
+| `valkit.change` | Change control: what a change requires before validated status returns |
+| `valkit.mcp` | The MCP tool surface, for driving a validation from a coding agent |
+| `valkit.worker` | Scheduled re-evaluation |
+| `api` | The HTTP API and web console (optional extra) |
 
 Some choices worth knowing about:
 
@@ -260,6 +306,11 @@ on disk, and every condition of the validated gate is forced to fail on its
 own. Statistical values are asserted against independently derived references
 (`mpmath` at 40 digits, test-only) rather than against the implementation's own
 output.
+
+Credential containment is asserted on every surface that can take one — the
+API, the MCP tools and the audit trail — including the case that is easy to
+miss: a validation error whose default behaviour is to echo the offending input
+back, which for a signing request is the password.
 
 ## Documentation
 
