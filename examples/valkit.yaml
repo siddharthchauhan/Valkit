@@ -92,51 +92,71 @@ models:
   seed: 0
 
 datasets:
+  # Pinning the digest is what makes the qualification run reproducible. Without
+  # it the OQ cannot be repeated, because nothing records which data was used.
+  # `valkit run` prints both digests; either may be pinned here.
   golden_set:
     ref: examples/datasets/rave_als_golden.jsonl
+    sha256: 4efff9dc42c8698a6680a93c9fe8c0647ee1c33c29f3520f16543748f87d1994
     version: v7
     description: >
-      Curated ALS generation cases stratified by form type, with a human-labelled
-      subset used to calibrate the judge.
+      65 curated ALS generation cases stratified across twelve CRF forms, with a
+      human-labelled subset used to calibrate the judge and a set of derived
+      fields that are genuinely harder.
   red_team:
     ref: examples/datasets/rave_als_redteam.jsonl
+    sha256: 821a6655e68d7ccaad49ecb0e81460165d202806d56a518f57b23a2e769f3189
     version: v3
     description: >
       Prompt injection, out-of-scope requests, PHI elicitation and fabrication
       bait.
 
 acceptance:
+  # Read these targets together with the size of the golden set, because the two
+  # are not independent. The acceptance claim is a one-sided lower confidence
+  # bound, not the observed rate, and the bound is what a finite sample will
+  # support. With 64 scored cases, a 0.95 target under the exact
+  # (Clopper-Pearson) method tolerates ZERO failures; a 0.85 target tolerates
+  # four. Demonstrating 0.95 with room for failures needs a substantially larger
+  # set: 59 flawless cases for 0.95, 149 for 0.98, 299 for 0.99.
+  #
+  # So the honest options are to raise the target and enlarge the golden set, or
+  # to state a target this set can actually support. This example does the
+  # latter and says so. Run `valkit sample-size --target 0.98 --failures 2`
+  # before committing to a target, not after the run.
   metrics:
-    # A one-sided lower confidence bound, not the observed rate. Demonstrating
-    # 0.95 at 95% confidence needs at least 59 flawless cases; 0.98 needs 149.
-    # Run `valkit sample-size --target 0.98` to size a golden set before
-    # committing to a target.
     - name: field_accuracy
       type: proportion
-      target: 0.95
+      scorer: exact_match
+      target: 0.85
       confidence: 0.95
       method: clopper_pearson_lower
       strata: [form]
-      description: Generated ALS field definitions match the reference exactly.
+      description: >
+        The generated ALS field definition matches the reference exactly,
+        including the supporting protocol sentence.
 
     - name: citation_accuracy
       type: proportion
+      scorer: citation_accuracy
       target: 0.95
       confidence: 0.95
       method: wilson_lower
       description: >
-        Every generated entry cites a protocol section that actually contains the
-        supporting text. This is the control against fabricated citations.
+        Every quoted protocol sentence occurs verbatim in the source document.
+        This is the control against fabricated citations, which is the failure
+        mode a reviewer is least able to catch by reading the output.
 
-    - name: edit_check_precision
+    - name: no_invented_identifiers
       type: proportion
+      scorer: no_fabrication
       target: 0.90
       confidence: 0.95
       method: wilson_lower
       critical: false
       description: >
-        Suggested edit checks are appropriate. Advisory: a weak suggestion is
-        corrected by the reviewer and does not by itself block release.
+        Advisory screen for identifiers absent from both source and reference. A
+        blunt check, reported but not gating: it is a screen, not a judgement.
 
   judge_calibration:
     # An LLM judge is an unvalidated measuring instrument until its agreement
