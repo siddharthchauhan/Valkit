@@ -77,11 +77,41 @@ pip install -e '.[api]'
 uvicorn api.main:app          # console on /, OpenAPI on /docs
 ```
 
-The console walks the same path the CLI does — specification, run, acceptance,
-the validated gate, package, signature — and is meant for the validation and QA
-people who will not be running Python. Every POST requires an `X-ValKit-Actor`
-header and lands in the audit trail; there is no `PUT`, `PATCH` or `DELETE`
-anywhere in the API, because records are append-only.
+The console is organised as the traceability chain itself — specification →
+requirement → risk → test → execution → evidence → document → signature — with
+integrity as a persistent state rather than a section at the bottom, and every
+screen addressable by URL so an auditor can be sent a link rather than a wizard
+step one. It is for the validation and QA people who will not be running Python.
+
+A few properties it holds to, each of which has a test:
+
+- **The lower bound is the claim.** No percentage appears anywhere, and no `±`
+  or interval bracket: the bound is one-sided, and a symmetric graphic would
+  draw an upper limit nobody computed.
+- **Colour is never a carrier.** Every state also renders the API's own word, a
+  three-letter token in a fixed-width gutter, and a border treatment, so the
+  screen is complete in monochrome and on a photocopy.
+- **Two typefaces mean two authors.** Serif is prose the API wrote, rendered
+  verbatim; sans is what the console wrote. Where the console must add
+  something beside a server sentence it is marked `Console note.` rather than
+  edited in — the screen and the audit trail then agree by construction.
+- **`sign.js` is the only file that reads a credential**, so containment is a
+  review of one file. It is read once at submit into one stack frame, cleared
+  in the same tick, and never placed in a URL, a header, browser storage or a
+  log line. The file contains no `console.*` call at all.
+- **No build step and no external request.** Plain HTML, CSS and ES modules,
+  system fonts, no CDN — it works in an air-gapped VPC.
+- **The paper path is the accessible path.** The narrow reflow, the 200% zoom
+  reflow and the print layout are one rule, so printing is exercised by every
+  zoomed session.
+
+Every POST requires an `X-ValKit-Actor` header and lands in the audit trail.
+There is no `PUT`, `PATCH` or `DELETE` anywhere in the API, and nothing in the
+interface implies a record can be edited or a signature withdrawn.
+
+`VALKIT_SERVE_CONSOLE` defaults to off in the deployment. `X-ValKit-Actor` is
+attribution, not authentication: put an identity provider in front and have it
+populate the header before exposing the console to anyone.
 
 ### From your own coding agent
 

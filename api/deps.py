@@ -93,6 +93,11 @@ class Services:
         self.base_dir = base_dir
 
         self.specs: dict[str, AgentSpec] = {}
+        # Warnings are produced by the loader, not derivable from the parsed
+        # specification, so they have to be kept when it is ingested or they are
+        # lost on the next read. They are the statistical-validity notes — the
+        # ones most worth not losing.
+        self.spec_warnings: dict[str, list[str]] = {}
         self.validations: dict[str, Validation] = {}
         # Serialises the stages, which mutate a pipeline in place. Evaluation is
         # IO-bound on model calls, so this is not where throughput comes from;

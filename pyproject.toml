@@ -62,7 +62,7 @@ valkit = [
   # Without this an installed ValKit cannot open an audit trail at all.
   "audit/*.sql",
 ]
-api = ["static/*.html", "static/*.js", "static/*.css"]
+api = ["static/**/*.html", "static/**/*.js", "static/**/*.css", "static/**/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

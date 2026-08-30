@@ -1,142 +1,68 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-GB">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>ValKit console</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
 
-<header>
-  <h1>ValKit</h1>
-  <span class="tag">Part 11 validation-as-code for LLM agents</span>
-  <span class="spacer"></span>
-  <label for="actor" class="no-print" style="margin:0 8px 0 0">Acting as</label>
-  <input id="actor" value="qa_lead" style="width:160px" aria-label="Acting as"
-         title="Recorded in the audit trail against everything you do here.">
+<a class="skip" href="#main">Skip to the record</a>
+
+<header class="masthead" role="banner">
+  <div class="mast-left">
+    <span class="wordmark">ValKit</span>
+    <span class="version" id="mast-version">ValKit</span>
+    <p class="avail" id="mast-avail" hidden></p>
+  </div>
+
+  <div class="mast-right">
+    <div class="identity" id="identity">
+      <div class="identity-row">
+        <label for="actor-input">Acting as</label>
+        <input id="actor-input" type="text" spellcheck="false" autocomplete="off"
+               autocapitalize="off" size="16" aria-describedby="actor-note">
+        <button type="button" id="actor-clear" class="linkish">Clear identity</button>
+      </div>
+      <p class="note" id="actor-note"></p>
+    </div>
+
+    <div class="theme" role="group" aria-label="Theme">
+      <button type="button" data-theme="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme="system" aria-pressed="true">System</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
 </header>
 
-<main>
+<nav class="mainnav" aria-label="Console">
+  <ul>
+    <li><a href="#/">Record index</a></li>
+    <li><a href="#/audit">Audit trail</a></li>
+    <li><a href="#/evidence">Evidence vault</a></li>
+    <li><a href="#/spec">Specification and run</a></li>
+  </ul>
+</nav>
 
-  <section id="spec-section">
-    <h2>1 &middot; Specification</h2>
-    <p class="hint">
-      What the agent is for, how it is used, what it must achieve and who signs
-      it off. The risk assessment, the requirements and the test cases are all
-      derived from this — nothing here is entered twice.
-    </p>
-    <label for="spec">valkit.yaml</label>
-    <textarea id="spec" spellcheck="false"></textarea>
-    <div class="row">
-      <button id="load-example" class="secondary">Load the example</button>
-      <button id="ingest">Ingest specification</button>
-    </div>
-    <div id="spec-result"></div>
-  </section>
+<section class="integrity" id="integrity-bar" aria-labelledby="integrity-h">
+  <h2 id="integrity-h" class="vh">Integrity</h2>
+</section>
 
-  <section id="run-section" class="hidden">
-    <h2>2 &middot; Validation run</h2>
-    <p class="hint">
-      Runs the acceptance battery, computes each metric as a one-sided lower
-      confidence bound, records the test executions and generates the package.
-      It stops before signing: a pipeline that signed on your behalf would
-      defeat the point of requiring a signature.
-    </p>
-    <div class="row">
-      <div class="grow">
-        <label for="spec-ref">Specification</label>
-        <select id="spec-ref"></select>
-      </div>
-      <button id="run">Run validation</button>
-    </div>
-    <div id="run-result"></div>
-  </section>
+<nav class="subnav" id="subnav" aria-label="This validation" hidden></nav>
 
-  <section id="acceptance-section" class="hidden">
-    <h2>3 &middot; Acceptance</h2>
-    <p class="hint">
-      The lower bound, not the observed rate, is the claim. The observed rate
-      describes the sample; the bound is what the sample supports.
-    </p>
-    <div id="metrics"></div>
-  </section>
+<div class="announce vh" id="announce" role="status" aria-live="polite"></div>
 
-  <section id="readiness-section" class="hidden">
-    <h2>4 &middot; The validated gate</h2>
-    <p class="hint">
-      Every condition is evaluated independently and reported, so you see
-      everything outstanding rather than the first thing.
-    </p>
-    <div id="readiness"></div>
-  </section>
+<main id="main" tabindex="-1"></main>
 
-  <section id="documents-section" class="hidden">
-    <h2>5 &middot; Package</h2>
-    <div id="documents"></div>
-    <div id="document-view"></div>
-  </section>
-
-  <section id="sign-section" class="hidden">
-    <h2>6 &middot; Electronic signature</h2>
-    <p class="hint">
-      21 CFR Part 11 subpart C. Your credential is sent in the request body over
-      the connection and nowhere else: it is never a query parameter, never
-      logged, and never written to the audit trail, which records that a signing
-      happened and which kinds of component satisfied it.
-    </p>
-    <div class="row">
-      <div>
-        <label for="signer">Identification code</label>
-        <input id="signer" value="qa_lead" autocomplete="username">
-      </div>
-      <div>
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password">
-      </div>
-      <div>
-        <label for="meaning">Meaning</label>
-        <select id="meaning">
-          <option value="approved">approved</option>
-          <option value="reviewed">reviewed</option>
-          <option value="authored">authored</option>
-          <option value="verified">verified</option>
-        </select>
-      </div>
-      <button id="register" class="secondary">Register this signer</button>
-      <button id="sign">Sign selected document</button>
-    </div>
-    <p class="note">
-      Registering a signer here exists so the console is usable end to end. A
-      real deployment binds the identity store to your directory, and the
-      identity proofing and the 11.100(b) and (c) certification that must
-      precede it are organisational controls no API call can supply.
-    </p>
-    <div id="sign-result"></div>
-  </section>
-
-  <section id="integrity-section">
-    <h2>Integrity</h2>
-    <p class="hint">
-      Separate from acceptance throughout. "The evidence cannot be trusted" and
-      "the agent did not meet its target" are different conversations.
-    </p>
-    <div class="row">
-      <button id="verify" class="secondary">Verify audit chain and evidence</button>
-      <button id="show-audit" class="secondary">Show audit trail</button>
-    </div>
-    <div id="integrity-result"></div>
-  </section>
-
-</main>
-
-<footer>
-  ValKit does not make anyone compliant. It produces evidence and documents.
-  It does not determine your context of use, curate your qualification set,
-  replace the critical thinking GAMP 5 requires, or substitute for a quality
-  system.
+<footer class="standing" role="contentinfo">
+  <h2>What this does not do</h2>
+  <p class="disclaimer" id="disc-1"></p>
+  <ul class="limits" id="disc-rest"></ul>
 </footer>
 
-<script src="/static/app.js"></script>
+<script type="module" src="/static/app.js"></script>
 </body>
 </html>

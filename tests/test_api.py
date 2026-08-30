@@ -572,6 +572,117 @@ class TestChangeControl:
         assert client.get(f"/api/v1/change-controls/{opened['cc_id']}").json() == opened
 
 
+class TestTheGate:
+    """Validated status is the output of evaluating every condition.
+
+    It is never an action a user performs, so the last signature a package
+    needs is what grants it.
+    """
+
+    def _sign_everything(self, client, validated):
+        client.post(
+            "/api/v1/signers",
+            json={"user_id": "qa_lead", "printed_name": "Dana Okafor", "password": PASSWORD},
+            headers=ACTOR,
+        )
+        for document in validated["documents"]:
+            response = client.post(
+                f"/api/v1/documents/{document['doc_id']}/signatures",
+                json={
+                    "user": "qa_lead",
+                    "meaning": "approved",
+                    "components": {"user_id": "qa_lead", "password": PASSWORD},
+                },
+                headers=ACTOR,
+            )
+            assert response.status_code == 201, document["doc_id"]
+
+    def test_signing_the_last_document_grants_validated_status(self, client, validated):
+        self._sign_everything(client, validated)
+        after = client.get(f"/api/v1/validations/{validated['validation_id']}").json()
+
+        assert after["readiness"]["ready"] is True
+        assert after["readiness"]["blockers"] == []
+        assert after["status"] == "validated"
+        assert after["validated_at"]
+
+    def test_the_record_never_says_not_validated_with_nothing_in_the_way(
+        self, client, validated
+    ):
+        """The contradiction this guards against: a package reporting
+        in_validation while also reporting an empty blocker list."""
+        self._sign_everything(client, validated)
+        after = client.get(f"/api/v1/validations/{validated['validation_id']}").json()
+        assert not (after["status"] != "validated" and not after["readiness"]["blockers"])
+
+    def test_a_partially_signed_package_is_still_in_validation(self, client, validated):
+        client.post(
+            "/api/v1/signers",
+            json={"user_id": "qa_lead", "printed_name": "Dana Okafor", "password": PASSWORD},
+            headers=ACTOR,
+        )
+        client.post(
+            f"/api/v1/documents/{validated['documents'][0]['doc_id']}/signatures",
+            json={
+                "user": "qa_lead",
+                "meaning": "approved",
+                "components": {"user_id": "qa_lead", "password": PASSWORD},
+            },
+            headers=ACTOR,
+        )
+        after = client.get(f"/api/v1/validations/{validated['validation_id']}").json()
+        assert after["status"] == "in_validation"
+        assert after["validated_at"] is None
+        assert after["readiness"]["blockers"]
+
+    def test_the_outstanding_conditions_survive_validated_status(self, client, validated):
+        """Unscripted PQ steps do not block the gate, and do not disappear
+        once it opens: validated status remains conditional on them."""
+        self._sign_everything(client, validated)
+        after = client.get(f"/api/v1/validations/{validated['validation_id']}").json()
+        assert after["status"] == "validated"
+        assert after["readiness"]["conditions"]
+
+
+class TestFieldShapes:
+    def test_the_change_control_impact_is_a_paragraph_not_characters(
+        self, client, ingested
+    ):
+        """ChangeControl.impact is a str; serialising it as a list exploded it
+        into one element per character."""
+        body = client.post(
+            "/api/v1/change-controls",
+            json={
+                "agent_id": "rave-als-generator",
+                "reason": "The primary model is being upgraded.",
+                "trigger": "model_version",
+            },
+            headers=ACTOR,
+        ).json()
+        assert isinstance(body["impact"], str)
+        assert len(body["impact"]) > 40
+        assert " " in body["impact"]
+
+    def test_specification_warnings_survive_a_second_read(self, client):
+        """The warnings are the loader's and are not derivable from the parsed
+        specification, so a re-read must carry them rather than re-derive.
+
+        Unpinning the golden set is the sharpest of them: it says the run
+        cannot be proven reproducible, which is exactly the note that must not
+        quietly vanish when someone reloads the page.
+        """
+        spec = SPEC_YAML.replace(
+            "    sha256: 4efff9dc42c8698a6680a93c9fe8c0647ee1c33c29f3520f16543748f87d1994\n",
+            "",
+            1,
+        )
+        first = client.post("/api/v1/specs", json={"yaml": spec}, headers=ACTOR).json()
+        assert any("not pinned to a digest" in w for w in first["warnings"]), first["warnings"]
+
+        again = client.get(f"/api/v1/specs/{first['ref']}").json()
+        assert again["warnings"] == first["warnings"]
+
+
 class TestErrorShape:
     def test_every_error_has_the_same_shape(self, client):
         """A client that has to branch on which shape came back gets it wrong."""

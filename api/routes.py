@@ -134,6 +134,7 @@ def ingest_spec(
     with svc.lock:
         svc.specs[spec.ref] = spec
         svc.specs[spec.agent_id] = spec
+        svc.spec_warnings[spec.ref] = list(result.warnings)
 
     svc.audit.append(
         actor=who,
@@ -185,6 +186,12 @@ def list_specs(svc: Services = Depends(services)) -> list[str]:
 
 @router.get("/specs/{ref}", response_model=SpecSummary, tags=["specifications"])
 def get_spec(ref: str, svc: Services = Depends(services)) -> SpecSummary:
+    """The specification as ingested, warnings included.
+
+    The warnings are the loader's, so they are carried from ingestion rather
+    than re-derived: they include the statistical-validity notes, which are the
+    ones a reader most needs on a second look.
+    """
     spec = svc.require_spec(ref)
     bundle = derive_all(spec)
     return SpecSummary(
@@ -198,7 +205,7 @@ def get_spec(ref: str, svc: Services = Depends(services)) -> SpecSummary:
         risks=len(bundle.risks),
         tests=len(bundle.tests),
         spec_sha256=spec.source_sha256,
-        warnings=[],
+        warnings=svc.spec_warnings.get(spec.ref, []),
     )
 
 
@@ -458,6 +465,13 @@ def sign_document(
         signed = validation.pipeline.sign(
             doc_id, body.user, body.meaning, dict(body.components), session, reason=body.reason
         )
+        # Re-run the gate. Validated status is the output of evaluating every
+        # condition, never an action a user performs — so the last signature a
+        # package needs is what grants it, and nothing else has to happen.
+        # Without this the record would sit at in_validation with an empty
+        # blocker list: the API would be saying the package is not validated
+        # while also saying nothing stands in its way.
+        validation.pipeline.finalise()
 
     signature = signed.signatures[-1]
     return SignatureResponse(
@@ -805,5 +819,5 @@ def _change_control_response(record: Any) -> ChangeControlResponse:
         reason=record.reason,
         opened_at=record.opened_at,
         required_scope=list(record.required_scope),
-        impact=list(record.impact),
+        impact=record.impact,
     )

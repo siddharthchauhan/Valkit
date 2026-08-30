@@ -1,413 +1,363 @@
-/* The console.
+/* Boot, shell and router.
  *
- * No framework and no build step, deliberately: this is a thin view over the
- * API, and a validation tool whose console needs a toolchain to audit is a
- * validation tool with an extra supplier to assess.
+ * Hash routes, not the History API: the console is served by a FileResponse at
+ * `/`, so a path router would 404 on refresh and on the auditor's deep link.
+ * Query state lives inside the hash, which makes a filtered view shareable.
  *
- * Two rules are enforced here as well as on the server, because a leak is a
- * leak wherever it happens:
- *   - the password field is read at submit time and never stored, and
- *   - nothing carrying a credential is ever put in a URL.
+ * The integrity bar is re-verified on boot, on a route change older than sixty
+ * seconds, and after every write — never on a timer, because each verification
+ * re-derives the whole chain server-side.
  */
 
-'use strict';
+import { api, IntegrityFailure } from './api.js';
+import { COPY } from './copy.js';
+import { announce, clear, el, errorBlock, tok } from './dom.js';
 
-const $ = (id) => document.getElementById(id);
+import { renderIndex } from './views/index.js';
+import { renderVerdict } from './views/verdict.js';
+import { renderAcceptance } from './views/acceptance.js';
+import { renderChain } from './views/chain.js';
+import { renderPackage } from './views/package.js';
+import { renderSign } from './views/sign.js';
+import { renderDocument } from './views/document.js';
+import { renderAudit } from './views/audit.js';
+import { renderEvidence } from './views/evidence.js';
+import { renderDigest } from './views/digest.js';
+import { renderMonitoring } from './views/monitoring.js';
+import { renderSpec } from './views/spec.js';
+import { renderPrint } from './views/print.js';
 
-const state = {
-  specRef: null,
-  validationId: null,
-  docId: null,
+// -------------------------------------------------------------- identity
+
+const ACTOR_KEY = 'valkit.actor';
+
+export const identity = {
+  get() {
+    try {
+      const raw = sessionStorage.getItem(ACTOR_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+  set(value) {
+    // sessionStorage, not localStorage: on a shared validation workstation a
+    // persisted identity misattributes the next person's work in the trail.
+    try {
+      if (!value) sessionStorage.removeItem(ACTOR_KEY);
+      else sessionStorage.setItem(ACTOR_KEY, JSON.stringify({
+        value,
+        set_at: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+      }));
+    } catch { /* a browser with storage disabled still works, read-only */ }
+    renderIdentity();
+  },
+  value() {
+    return this.get()?.value || '';
+  },
 };
 
-function actor() {
-  const value = $('actor').value.trim();
-  if (!value) throw new Error('Set who you are acting as. It is recorded in the audit trail.');
-  return value;
+function renderIdentity() {
+  const held = identity.get();
+  const input = document.getElementById('actor-input');
+  const note = document.getElementById('actor-note');
+  const clearBtn = document.getElementById('actor-clear');
+  if (!input) return;
+  // Never write back into the field while it has focus: it would move the
+  // caret out from under someone mid-word.
+  if (document.activeElement !== input) input.value = held?.value || '';
+  note.textContent = held ? COPY.ID_SET(held.set_at) : COPY.ID_UNSET;
+  clearBtn.hidden = !held;
 }
 
-async function api(path, options = {}) {
-  const headers = { 'Accept': 'application/json' };
-  if (options.body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    headers['X-ValKit-Actor'] = actor();
-  } else if (options.withActor) {
-    headers['X-ValKit-Actor'] = actor();
-  }
+// ------------------------------------------------------------ read gate
 
-  const response = await fetch(path, {
-    method: options.method || (options.body !== undefined ? 'POST' : 'GET'),
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+export const opened = {
+  key: (validationId) => `valkit.opened.${validationId}`,
+  record(validationId, docId) {
+    try {
+      const all = this.all(validationId);
+      all[docId] = new Date().toISOString();
+      sessionStorage.setItem(this.key(validationId), JSON.stringify(all));
+    } catch { /* storage disabled: the queue simply stays locked */ }
+  },
+  all(validationId) {
+    try {
+      return JSON.parse(sessionStorage.getItem(this.key(validationId)) || '{}');
+    } catch {
+      return {};
+    }
+  },
+};
+
+// ---------------------------------------------------------------- theme
+
+const THEME_KEY = 'valkit.theme';
+
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', choice);
+  try { localStorage.setItem(THEME_KEY, choice); } catch { /* not essential */ }
+  document.querySelectorAll('.theme button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.theme === choice));
   });
+}
 
-  const type = response.headers.get('content-type') || '';
-  const payload = type.includes('application/json') ? await response.json() : await response.text();
-  if (!response.ok) {
-    const message = (payload && payload.error) || response.statusText;
-    const detail = payload && payload.detail;
-    throw new Error(typeof detail === 'string' ? `${message}\n${detail}` : message);
+// ------------------------------------------------------- integrity bar
+
+let integrityState = { ok: null, at: null, chain: null, evidence: null };
+export const getIntegrity = () => integrityState;
+
+async function verifyIntegrity() {
+  const bar = document.getElementById('integrity-bar');
+  const [chain, evidence] = await Promise.allSettled([
+    api.verifyAudit(),
+    api.verifyEvidence(),
+  ]);
+
+  const chainValue = chain.status === 'fulfilled' ? chain.value : null;
+  const evidenceValue = evidence.status === 'fulfilled' ? evidence.value : null;
+  integrityState = {
+    chain: chainValue,
+    evidence: evidenceValue,
+    ok: Boolean(chainValue?.ok && evidenceValue?.ok),
+    at: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
+  };
+
+  clear(bar);
+  bar.append(el('h2', { id: 'integrity-h', class: 'vh', text: 'Integrity' }));
+
+  const cells = el('div', { class: 'integrity-cells' });
+  cells.append(
+    cell(chainValue, COPY.INT_CHAIN, 'Audit chain', chainValue?.detail?.chain_digest),
+    cell(evidenceValue, COPY.INT_VAULT, 'Evidence vault', null),
+  );
+  bar.append(cells);
+
+  const asat = el('p', { class: 'asat' }, [
+    `Verified at ${integrityState.at}.`,
+    el('button', { type: 'button', text: 'Verify again', onclick: () => verifyIntegrity() }),
+  ]);
+  bar.append(asat, el('p', { class: 'note', text: COPY.INT_LIMIT }));
+  return integrityState;
+}
+
+function cell(result, line, name, chainDigest) {
+  let state = 'unknown';
+  let token = 'INT';
+  let text = COPY.INT_FAILED_REQUEST;
+
+  if (result && result.ok) {
+    state = 'ok';
+    token = 'OK';
+    text = line(result.checked);
+  } else if (result) {
+    state = 'integrity';
+    token = 'INT';
+    text = `${name} — ${result.reason || 'verification failed'}`;
   }
-  return payload;
-}
 
-function show(id) { $(id).classList.remove('hidden'); }
-
-function fail(target, error) {
-  $(target).innerHTML = '';
-  const box = document.createElement('div');
-  box.className = 'error';
-  box.textContent = error.message || String(error);
-  $(target).appendChild(box);
-}
-
-function clear(target) { $(target).innerHTML = ''; }
-
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
+  const node = el('div', { class: 'cell', dataset: { state } }, [tok(token)]);
+  const body = el('div', {}, [el('p', { class: 'cell-line', text })]);
+  if (chainDigest) {
+    const digestLine = el('p', { class: 'cell-line' }, ['Chain digest ']);
+    import('./dom.js').then(({ digest }) => digestLine.append(digest(chainDigest)));
+    body.append(digestLine);
+  }
+  node.append(body);
   return node;
 }
 
-function pill(ok, passText, failText) {
-  return el('span', `pill ${ok ? 'pass' : 'fail'}`, ok ? passText : failText);
+// --------------------------------------------------------------- router
+
+const ROUTES = [
+  [/^\/?$/, () => renderIndex()],
+  [/^\/spec$/, () => renderSpec()],
+  [/^\/audit$/, (_, query) => renderAudit(query)],
+  [/^\/evidence$/, (_, query) => renderEvidence(query)],
+  [/^\/digest\/([0-9a-fA-F]+)$/, (m) => renderDigest(m[1].toLowerCase())],
+  [/^\/agent\/([^/]+)\/monitoring$/, (m) => renderMonitoring(decodeURIComponent(m[1]))],
+  [/^\/doc\/([^/]+)$/, (m, query) => renderDocument(decodeURIComponent(m[1]), query.v || null)],
+  [/^\/v\/([^/]+)\/acceptance$/, (m) => renderAcceptance(decodeURIComponent(m[1]))],
+  [/^\/v\/([^/]+)\/chain$/, (m) => renderChain(decodeURIComponent(m[1]))],
+  [/^\/v\/([^/]+)\/chain\/([^/]+)$/, (m) => renderChain(decodeURIComponent(m[1]), decodeURIComponent(m[2]))],
+  [/^\/v\/([^/]+)\/package$/, (m) => renderPackage(decodeURIComponent(m[1]))],
+  [/^\/v\/([^/]+)\/sign$/, (m) => renderSign(decodeURIComponent(m[1]))],
+  [/^\/v\/([^/]+)\/print$/, (m) => renderPrint(decodeURIComponent(m[1]))],
+  [/^\/v\/([^/]+)$/, (m) => renderVerdict(decodeURIComponent(m[1]))],
+];
+
+function parseHash() {
+  const raw = location.hash.replace(/^#/, '') || '/';
+  const [path, search] = raw.split('?');
+  return { path: path || '/', query: Object.fromEntries(new URLSearchParams(search || '')) };
 }
 
-function table(headings, rows) {
-  const t = el('table');
-  const thead = el('thead');
-  const tr = el('tr');
-  headings.forEach((h) => tr.appendChild(el('th', null, h)));
-  thead.appendChild(tr);
-  t.appendChild(thead);
-  const tbody = el('tbody');
-  rows.forEach((cells) => {
-    const row = el('tr');
-    cells.forEach((cell) => {
-      const td = el('td');
-      if (cell && cell.nodeType) td.appendChild(cell);
-      else if (cell && typeof cell === 'object') {
-        td.className = cell.className || '';
-        if (cell.node) td.appendChild(cell.node);
-        else td.textContent = cell.text;
-      } else td.textContent = cell;
-      row.appendChild(td);
-    });
-    tbody.appendChild(row);
+export function navigate(hash) {
+  location.hash = hash;
+}
+
+const SUBNAV = [
+  ['', 'Verdict'],
+  ['/acceptance', 'Acceptance'],
+  ['/chain', 'Chain'],
+  ['/package', 'Package'],
+  ['/sign', 'Sign'],
+  ['/print', 'Print'],
+];
+
+function renderSubnav(path, query = {}) {
+  const nav = document.getElementById('subnav');
+  const match = path.match(/^\/v\/([^/]+)/);
+  clear(nav);
+
+  // A document screen belongs to a validation too, and the reader who opened it
+  // from the package needs the way back. The route carries which one.
+  const id = match ? match[1] : (path.startsWith('/doc/') && query.v
+    ? encodeURIComponent(query.v)
+    : null);
+  if (!id) { nav.hidden = true; return; }
+
+  nav.hidden = false;
+  const list = el('ul');
+  list.append(el('li', {}, [el('span', { class: 'val-id', text: decodeURIComponent(id) })]));
+  const signable = Boolean(identity.value()) && integrityState.ok !== false;
+
+  for (const [suffix, name] of SUBNAV) {
+    const href = `#/v/${id}${suffix}`;
+    const current = path === `/v/${id}${suffix}`;
+    const disabled = name === 'Sign' && !signable;
+    list.append(el('li', {}, [el('a', {
+      href,
+      text: name,
+      'aria-current': current ? 'page' : null,
+      'aria-disabled': disabled ? 'true' : null,
+      title: disabled
+        ? (identity.value() ? 'Refused while integrity has failed.' : COPY.SIGN_NO_IDENTITY)
+        : null,
+    })]));
+  }
+  nav.append(list);
+}
+
+function markMainNav(path) {
+  const target = path === '/' ? '#/' : `#${path.split('?')[0]}`;
+  document.querySelectorAll('.mainnav a').forEach((a) => {
+    if (a.getAttribute('href') === target) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   });
-  t.appendChild(tbody);
-  return t;
 }
 
-// -- 1. specification ------------------------------------------------------
+let lastVerified = 0;
 
-$('load-example').addEventListener('click', async () => {
-  try {
-    const response = await fetch('/api/v1/example-spec');
-    $('spec').value = await response.text();
-  } catch (error) {
-    fail('spec-result', error);
-  }
-});
+async function route() {
+  const { path, query } = parseHash();
+  const main = document.getElementById('main');
 
-$('ingest').addEventListener('click', async () => {
-  clear('spec-result');
-  try {
-    const result = await api('/api/v1/specs', { body: { yaml: $('spec').value, strict: true } });
-    state.specRef = result.ref;
+  markMainNav(path);
+  renderSubnav(path, query);
 
-    const target = $('spec-result');
-    const escalated = result.risk_class !== result.derived_risk_class;
-    target.appendChild(
-      table(
-        ['Agent', 'Version', 'GAMP', 'Risk class', 'Requirements', 'Risks', 'Tests'],
-        [[
-          result.agent_id,
-          result.version,
-          `Category ${result.gamp_category}`,
-          escalated
-            ? `${result.derived_risk_class} → ${result.risk_class} (escalated)`
-            : result.risk_class,
-          { className: 'num', text: result.requirements },
-          { className: 'num', text: result.risks },
-          { className: 'num', text: result.tests },
-        ]]
-      )
-    );
-    target.appendChild(
-      el('p', 'note', `Specification digest ${result.spec_sha256.slice(0, 16)}…`)
-    );
-    if (result.warnings.length) {
-      const list = el('ul', 'reasons conditions');
-      result.warnings.forEach((w) => list.appendChild(el('li', null, w)));
-      target.appendChild(el('h3', null, 'Warnings'));
-      target.appendChild(list);
-    }
-
-    const select = $('spec-ref');
-    if (![...select.options].some((o) => o.value === result.ref)) {
-      select.appendChild(new Option(result.ref, result.ref));
-    }
-    select.value = result.ref;
-    show('run-section');
-  } catch (error) {
-    fail('spec-result', error);
-  }
-});
-
-// -- 2 to 5. run, acceptance, readiness, package ---------------------------
-
-$('run').addEventListener('click', async () => {
-  clear('run-result');
-  $('run').disabled = true;
-  $('run').textContent = 'Running…';
-  try {
-    const result = await api('/api/v1/validations', { body: { spec_ref: $('spec-ref').value } });
-    state.validationId = result.validation_id;
-    render(result);
-  } catch (error) {
-    fail('run-result', error);
-  } finally {
-    $('run').disabled = false;
-    $('run').textContent = 'Run validation';
-  }
-});
-
-function render(validation) {
-  renderRun(validation);
-  renderReadiness(validation);
-  renderDocuments(validation);
-  show('acceptance-section');
-  show('readiness-section');
-  show('documents-section');
-  show('sign-section');
-}
-
-function renderRun(validation) {
-  clear('run-result');
-  clear('metrics');
-  const run = validation.run;
-  if (!run) return;
-
-  $('run-result').appendChild(
-    el('p', 'muted mono', `${run.run_id} · ${run.model} · dataset ${run.dataset_sha256.slice(0, 16)}…`)
-  );
-
-  $('metrics').appendChild(
-    table(
-      ['Metric', 'Passed', 'n', 'Observed', 'Lower bound', 'Target', 'Method', 'Result'],
-      run.metrics.map((m) => [
-        m.critical ? `${m.name} (critical)` : m.name,
-        { className: 'num', text: `${m.k}` },
-        { className: 'num', text: `${m.n}` },
-        { className: 'num', text: m.point_estimate.toFixed(4) },
-        { className: 'num', text: m.lower_bound.toFixed(4) },
-        { className: 'num', text: m.target.toFixed(2) },
-        m.method,
-        { node: pill(m.passed, 'met', 'not met') },
-      ])
-    )
-  );
-
-  if (run.calibration) {
-    const c = run.calibration;
-    const line = el('p', 'note');
-    line.appendChild(
-      document.createTextNode(
-        `Judge calibration: Cohen's κ ${c.cohen_kappa.toFixed(3)} against a required ` +
-        `minimum of ${c.min_required.toFixed(2)} over ${c.n} labelled cases — `
-      )
-    );
-    line.appendChild(pill(c.passed, 'met', 'not met'));
-    $('metrics').appendChild(line);
-  }
-}
-
-function renderReadiness(validation) {
-  const target = $('readiness');
-  target.innerHTML = '';
-  const r = validation.readiness;
-
-  const banner = el('div', `status-banner ${r.ready ? 'ready' : 'blocked'}`);
-  banner.appendChild(el('strong', null, r.ready ? 'VALIDATED' : validation.status.toUpperCase()));
-  banner.appendChild(
-    el('div', 'muted', r.ready
-      ? 'Every condition for validated status holds.'
-      : `${r.blockers.length} condition(s) outstanding.`)
-  );
-  target.appendChild(banner);
-
-  const section = (title, items, className) => {
-    if (!items.length) return;
-    target.appendChild(el('h3', null, title));
-    const list = el('ul', `reasons ${className}`);
-    items.forEach((item) => list.appendChild(el('li', null, item)));
-    target.appendChild(list);
-  };
-
-  section('Blocking', r.blockers, 'blockers');
-  section('Outstanding obligations', r.conditions, 'conditions');
-  section('Satisfied', r.satisfied, '');
-}
-
-function renderDocuments(validation) {
-  const target = $('documents');
-  target.innerHTML = '';
-  if (!validation.documents.length) {
-    target.appendChild(el('p', 'muted', 'No documents were generated.'));
-    return;
-  }
-
-  target.appendChild(
-    table(
-      ['Document', 'Type', 'Digest', 'Signatures', 'Approvals', ''],
-      validation.documents.map((d) => {
-        const open = el('button', 'secondary', 'Open');
-        open.addEventListener('click', () => openDocument(d.doc_id));
-        return [
-          d.title,
-          d.doc_type,
-          { className: 'mono', text: `${d.content_sha256.slice(0, 12)}…` },
-          { className: 'num', text: `${d.signature_count}` },
-          { node: pill(d.signatures_required_met, 'complete', 'outstanding') },
-          { node: open },
-        ];
-      })
-    )
-  );
-
-  const skipped = Object.entries(validation.skipped_documents || {});
-  if (skipped.length) {
-    target.appendChild(el('h3', null, 'Not generated'));
-    const list = el('ul', 'reasons conditions');
-    skipped.forEach(([type, reason]) => list.appendChild(el('li', null, `${type}: ${reason}`)));
-    target.appendChild(list);
-  }
-}
-
-async function openDocument(docId) {
-  state.docId = docId;
-  const target = $('document-view');
-  target.innerHTML = '';
-  try {
-    const response = await fetch(`/api/v1/documents/${encodeURIComponent(docId)}?format=markdown`);
-    if (!response.ok) throw new Error(`could not fetch ${docId}`);
-    const content = await response.text();
-    target.appendChild(el('h3', null, docId));
-    target.appendChild(el('pre', 'doc', content));
-  } catch (error) {
-    fail('document-view', error);
-  }
-}
-
-// -- 6. signature ----------------------------------------------------------
-
-$('register').addEventListener('click', async () => {
-  clear('sign-result');
-  try {
-    const password = $('password').value;
-    if (!password) throw new Error('A password component is required.');
-    const result = await api('/api/v1/signers', {
-      body: {
-        user_id: $('signer').value,
-        printed_name: $('signer').value,
-        password,
-        roles: ['qa'],
-      },
+  const age = Date.now() - lastVerified;
+  if (!lastVerified || age > 60_000) {
+    lastVerified = Date.now();
+    verifyIntegrity().then(() => {
+      const now = parseHash();
+      renderSubnav(now.path, now.query);
     });
-    $('sign-result').appendChild(
-      el('p', 'muted', `Registered ${result.printed_name} (${result.user_id}).`)
-    );
-  } catch (error) {
-    fail('sign-result', error);
   }
-});
 
-$('sign').addEventListener('click', async () => {
-  clear('sign-result');
+  clear(main);
+  main.append(el('p', { class: 'pending', role: 'status', text: COPY.PENDING('the record') }));
+
+  const matched = ROUTES.find(([pattern]) => pattern.test(path));
   try {
-    if (!state.docId) throw new Error('Open a document first, then sign it.');
-    // Read the credential at submit time. It is not held in the page state and
-    // it is not put in the URL.
-    const password = $('password').value;
-    if (!password) throw new Error('A password component is required.');
-
-    const result = await api(`/api/v1/documents/${encodeURIComponent(state.docId)}/signatures`, {
-      body: {
-        user: $('signer').value,
-        meaning: $('meaning').value,
-        components: { user_id: $('signer').value, password },
-      },
-    });
-    $('password').value = '';
-
-    const target = $('sign-result');
-    target.appendChild(el('h3', null, 'Signature manifest'));
-    target.appendChild(el('pre', 'doc', result.manifest));
-
-    const refreshed = await api(`/api/v1/validations/${state.validationId}`);
-    render(refreshed);
-  } catch (error) {
-    fail('sign-result', error);
+    let content;
+    if (!matched) {
+      content = el('div', {}, [
+        el('p', { class: 'console-note', text: COPY.ROUTE_UNKNOWN }),
+        await renderIndex(),
+      ]);
+    } else {
+      content = await matched[1](path.match(matched[0]), query);
+    }
+    clear(main);
+    main.append(content);
+  } catch (err) {
+    clear(main);
+    main.append(err instanceof IntegrityFailure ? interdiction(err) : errorBlock(err));
   }
-});
 
-// -- integrity -------------------------------------------------------------
+  main.focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+}
 
-$('verify').addEventListener('click', async () => {
-  const target = $('integrity-result');
-  target.innerHTML = '';
-  try {
-    const [chain, evidence] = await Promise.all([
-      fetch('/api/v1/audit/verify').then((r) => r.json()),
-      fetch('/api/v1/evidence/verify').then((r) => r.json()),
-    ]);
-    target.appendChild(
-      table(
-        ['Control', 'Checked', 'Result', 'Detail'],
-        [
-          [
-            'Audit chain (11.10(e))',
-            { className: 'num', text: `${chain.checked}` },
-            { node: pill(chain.ok, 'intact', 'broken') },
-            chain.reason || 'Re-derived from the genesis record.',
-          ],
-          [
-            'Evidence vault (11.10(c))',
-            { className: 'num', text: `${evidence.checked}` },
-            { node: pill(evidence.ok, 'verified', 'failed') },
-            evidence.reason || 'Every object re-hashed from its bytes.',
-          ],
-        ]
-      )
-    );
-  } catch (error) {
-    fail('integrity-result', error);
+export function interdiction(err) {
+  const box = el('section', { class: 'interdiction', role: 'alert' }, [
+    el('h1', { text: COPY.INTERDICT_H }),
+    el('p', { class: 'server', text: err.error || String(err.message || '') }),
+    el('p', { text: COPY.INTERDICT_1 }),
+    el('p', { text: COPY.INTERDICT_2 }),
+    el('p', { text: COPY.INTERDICT_3 }),
+  ]);
+  box.append(el('p', {}, [
+    el('a', { href: api.auditExportUrl('text'), text: 'Export the audit trail as text' }),
+    ' · ',
+    el('a', { href: api.auditExportUrl('jsonl'), text: 'Export as JSONL' }),
+  ]));
+  return box;
+}
+
+/** Re-verify after a write, and let the caller re-render. */
+export async function afterWrite() {
+  lastVerified = Date.now();
+  await verifyIntegrity();
+  const now = parseHash();
+  renderSubnav(now.path, now.query);
+}
+
+// ----------------------------------------------------------------- boot
+
+function boot() {
+  document.getElementById('disc-1').textContent = COPY.DISC_1;
+  const rest = document.getElementById('disc-rest');
+  for (const line of COPY.DISC_REST) rest.append(el('li', { text: line }));
+
+  let theme = 'system';
+  try { theme = localStorage.getItem(THEME_KEY) || 'system'; } catch { /* default */ }
+  applyTheme(theme);
+  document.querySelectorAll('.theme button').forEach((b) => {
+    b.addEventListener('click', () => applyTheme(b.dataset.theme));
+  });
+
+  renderIdentity();
+  const input = document.getElementById('actor-input');
+  // `input` as well as `change`, so the value is held from the first keystroke
+  // rather than only when focus leaves. Someone who types an identity and goes
+  // straight to a screen that needs one should not find it unset.
+  for (const event of ['input', 'change', 'blur']) {
+    input.addEventListener(event, () => identity.set(input.value.trim()));
   }
-});
+  document.getElementById('actor-clear').addEventListener('click', () => {
+    identity.set('');
+    announce('Identity cleared.');
+  });
 
-$('show-audit').addEventListener('click', async () => {
-  const target = $('integrity-result');
-  target.innerHTML = '';
-  try {
-    const result = await api('/api/v1/audit?limit=50');
-    target.appendChild(
-      el('p', 'muted mono', `${result.total} events · chain digest ${result.chain_digest.slice(0, 16)}…`)
-    );
-    target.appendChild(
-      table(
-        ['#', 'Time', 'Actor', 'Action', 'Entity'],
-        result.records.map((r) => [
-          { className: 'num', text: `${r.seq}` },
-          { className: 'mono', text: r.ts },
-          r.actor,
-          r.action,
-          { className: 'mono', text: `${r.entity_type}:${r.entity_id}` },
-        ])
-      )
-    );
-  } catch (error) {
-    fail('integrity-result', error);
-  }
-});
+  api.readyz().then((health) => {
+    document.getElementById('mast-version').textContent = `ValKit ${health.version}`;
+    if (health.status !== 'ok') {
+      const line = document.getElementById('mast-avail');
+      line.hidden = false;
+      line.textContent = COPY.INT_UNAVAILABLE(
+        health.detail?.audit_chain?.reason || '',
+        health.detail?.evidence_vault?.reason || '',
+      );
+    }
+  }).catch(() => { /* the integrity bar reports what matters */ });
+
+  window.addEventListener('hashchange', route);
+  route();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();

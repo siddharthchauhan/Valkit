@@ -269,7 +269,9 @@ class ChangeControlResponse(BaseModel):
     reason: str
     opened_at: str
     required_scope: list[str]
-    impact: list[str]
+    # A paragraph, not a list. ChangeControl.impact is a str, and serialising it
+    # as list(...) exploded it into one element per character.
+    impact: str
 
 
 # -- integrity and health --------------------------------------------------

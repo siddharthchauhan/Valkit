@@ -228,6 +228,13 @@ def _install_console(application: FastAPI) -> None:
     def console() -> FileResponse:
         return FileResponse(str(STATIC_DIR / "index.html"))
 
+    @application.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        # The page declares an SVG icon, but a browser that ignores the tag asks
+        # for this path anyway, and a 404 in the console of a validation tool is
+        # noise that trains people to ignore the console.
+        return FileResponse(str(STATIC_DIR / "favicon.svg"), media_type="image/svg+xml")
+
 
 _app: FastAPI | None = None
 
