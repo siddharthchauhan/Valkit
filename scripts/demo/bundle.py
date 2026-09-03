@@ -122,6 +122,7 @@ def bundle(fixture: dict | None, banner: str) -> str:
         fixture_js = json.dumps(fixture).replace("</", "<\\/")
         demo_banner = f'''<div class="demo-banner" role="note">
   <strong>Demo.</strong> {banner}
+  <span id="demo-banner-mode"></span>
 </div>'''
         parts += [
             "<style>",
@@ -152,9 +153,8 @@ def main() -> None:
         "--banner",
         default=(
             "Every number, document, digest and audit record on this page came from the real "
-            "ValKit engine and is served exactly as recorded. Signing, registering and running "
-            "change this page’s memory and nothing else: nothing done here is recorded anywhere. "
-            "To run the real thing: pip install -e '.[api]' && uvicorn api.main:app"
+            "ValKit engine and is served exactly as recorded; the page carries no engine, so it "
+            "cannot run a battery or generate a document."
         ),
     )
     args = parser.parse_args()
