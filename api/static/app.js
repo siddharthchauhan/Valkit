@@ -11,7 +11,8 @@
 
 import { api, IntegrityFailure } from './api.js';
 import { COPY } from './copy.js';
-import { announce, clear, el, errorBlock, tok } from './dom.js';
+import { announce, clear, digest, el, errorBlock, tok } from './dom.js';
+import { hooks, identity } from './session.js';
 
 import { renderIndex } from './views/index.js';
 import { renderVerdict } from './views/verdict.js';
@@ -29,34 +30,6 @@ import { renderPrint } from './views/print.js';
 
 // -------------------------------------------------------------- identity
 
-const ACTOR_KEY = 'valkit.actor';
-
-export const identity = {
-  get() {
-    try {
-      const raw = sessionStorage.getItem(ACTOR_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  },
-  set(value) {
-    // sessionStorage, not localStorage: on a shared validation workstation a
-    // persisted identity misattributes the next person's work in the trail.
-    try {
-      if (!value) sessionStorage.removeItem(ACTOR_KEY);
-      else sessionStorage.setItem(ACTOR_KEY, JSON.stringify({
-        value,
-        set_at: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
-      }));
-    } catch { /* a browser with storage disabled still works, read-only */ }
-    renderIdentity();
-  },
-  value() {
-    return this.get()?.value || '';
-  },
-};
-
 function renderIdentity() {
   const held = identity.get();
   const input = document.getElementById('actor-input');
@@ -69,26 +42,6 @@ function renderIdentity() {
   note.textContent = held ? COPY.ID_SET(held.set_at) : COPY.ID_UNSET;
   clearBtn.hidden = !held;
 }
-
-// ------------------------------------------------------------ read gate
-
-export const opened = {
-  key: (validationId) => `valkit.opened.${validationId}`,
-  record(validationId, docId) {
-    try {
-      const all = this.all(validationId);
-      all[docId] = new Date().toISOString();
-      sessionStorage.setItem(this.key(validationId), JSON.stringify(all));
-    } catch { /* storage disabled: the queue simply stays locked */ }
-  },
-  all(validationId) {
-    try {
-      return JSON.parse(sessionStorage.getItem(this.key(validationId)) || '{}');
-    } catch {
-      return {};
-    }
-  },
-};
 
 // ---------------------------------------------------------------- theme
 
@@ -162,7 +115,7 @@ function cell(result, line, name, chainDigest) {
   const body = el('div', {}, [el('p', { class: 'cell-line', text })]);
   if (chainDigest) {
     const digestLine = el('p', { class: 'cell-line' }, ['Chain digest ']);
-    import('./dom.js').then(({ digest }) => digestLine.append(digest(chainDigest)));
+    digestLine.append(digest(chainDigest));
     body.append(digestLine);
   }
   node.append(body);
@@ -309,12 +262,14 @@ export function interdiction(err) {
 }
 
 /** Re-verify after a write, and let the caller re-render. */
-export async function afterWrite() {
+async function afterWrite() {
   lastVerified = Date.now();
   await verifyIntegrity();
   const now = parseHash();
   renderSubnav(now.path, now.query);
 }
+hooks.afterWrite = afterWrite;
+hooks.identityChanged = renderIdentity;
 
 // ----------------------------------------------------------------- boot
 

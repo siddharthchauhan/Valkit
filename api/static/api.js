@@ -20,6 +20,11 @@
 
 const BASE = '/api/v1';
 
+/* The one place a request leaves the console. A page that carries a recording
+   of the backend — the published demo — installs its own transport here before
+   the console boots; everywhere else this is the browser's fetch. */
+const transport = (...args) => (globalThis.__valkitTransport || globalThis.fetch)(...args);
+
 const INTEGRITY_TYPES = new Set(['IntegrityError', 'AuditError', 'VaultError']);
 
 export class ApiError extends Error {
@@ -59,7 +64,7 @@ async function request(path, options = {}) {
 
   let response;
   try {
-    response = await fetch(path.startsWith('/') ? path : `${BASE}/${path}`, {
+    response = await transport(path.startsWith('/') ? path : `${BASE}/${path}`, {
       method,
       headers,
       credentials: 'same-origin',

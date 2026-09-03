@@ -17,7 +17,7 @@ import { api, cached, invalidate } from '../api.js';
 import { COPY } from '../copy.js';
 import { announce, consoleNote, dataRegion, el, errorBlock, section, tok } from '../dom.js';
 import { applyBatch, registerSigner } from '../sign.js';
-import { afterWrite, identity, opened } from '../app.js';
+import { afterWrite, identity, opened } from '../session.js';
 
 const MEANINGS = ['approved', 'reviewed', 'verified', 'authored'];
 

@@ -29,6 +29,11 @@ import { ApiError, IntegrityFailure } from './api.js';
 
 const BASE = '/api/v1';
 
+/* The one place a request leaves the console. A page that carries a recording
+   of the backend — the published demo — installs its own transport here before
+   the console boots; everywhere else this is the browser's fetch. */
+const transport = (...args) => (globalThis.__valkitTransport || globalThis.fetch)(...args);
+
 /** One signing. All components, every time.
  *
  * `session_id` is never sent: SignatureService.open_session is unreachable over
@@ -38,7 +43,7 @@ const BASE = '/api/v1';
 async function postSignature(docId, body, actor) {
   let response;
   try {
-    response = await fetch(`${BASE}/documents/${encodeURIComponent(docId)}/signatures`, {
+    response = await transport(`${BASE}/documents/${encodeURIComponent(docId)}/signatures`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: {
@@ -151,7 +156,7 @@ export async function registerSigner({ userId, printedName, form, actor }) {
   field.disabled = true;
 
   try {
-    const response = await fetch(`${BASE}/signers`, {
+    const response = await transport(`${BASE}/signers`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: {

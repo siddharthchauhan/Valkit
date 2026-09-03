@@ -13,7 +13,7 @@ import { api } from '../api.js';
 import { COPY } from '../copy.js';
 import { consoleNote, dataRegion, defs, digest, el, ledger, section, tok } from '../dom.js';
 import { label } from '../fmt.js';
-import { opened } from '../app.js';
+import { opened } from '../session.js';
 
 export async function renderDocument(docId, validationId = null) {
   const host = el('div');

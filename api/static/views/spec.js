@@ -9,7 +9,7 @@
 import { api, invalidate } from '../api.js';
 import { COPY } from '../copy.js';
 import { consoleNote, dataRegion, defs, digest, el, errorBlock, proseList, section } from '../dom.js';
-import { afterWrite, identity } from '../app.js';
+import { afterWrite, identity } from '../session.js';
 
 export async function renderSpec() {
   const root = el('div', {}, [
