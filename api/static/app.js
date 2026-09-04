@@ -92,7 +92,12 @@ async function verifyIntegrity() {
     `Verified at ${integrityState.at}.`,
     el('button', { type: 'button', text: 'Verify again', onclick: () => verifyIntegrity() }),
   ]);
-  bar.append(asat, el('p', { class: 'note', text: COPY.INT_LIMIT }));
+  const detail = el('details', { class: 'integrity-detail' }, [
+    el('summary', { text: 'Integrity details' }),
+    asat,
+    el('p', { class: 'note', text: COPY.INT_LIMIT }),
+  ]);
+  bar.append(detail);
   return integrityState;
 }
 
@@ -126,7 +131,7 @@ function cell(result, line, name, chainDigest) {
 
 const ROUTES = [
   [/^\/?$/, () => renderIndex()],
-  [/^\/spec$/, () => renderSpec()],
+  [/^\/spec$/, (_, query) => renderSpec({ loadExample: query.example === '1' })],
   [/^\/audit$/, (_, query) => renderAudit(query)],
   [/^\/evidence$/, (_, query) => renderEvidence(query)],
   [/^\/digest\/([0-9a-fA-F]+)$/, (m) => renderDigest(m[1].toLowerCase())],
@@ -152,11 +157,11 @@ export function navigate(hash) {
 }
 
 const SUBNAV = [
-  ['', 'Verdict'],
-  ['/acceptance', 'Acceptance'],
-  ['/chain', 'Chain'],
-  ['/package', 'Package'],
-  ['/sign', 'Sign'],
+  ['', 'Overview'],
+  ['/acceptance', 'Results'],
+  ['/chain', 'Traceability'],
+  ['/package', 'Documents'],
+  ['/sign', 'Approvals'],
   ['/print', 'Print'],
 ];
 

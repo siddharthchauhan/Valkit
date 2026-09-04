@@ -10,41 +10,50 @@
 </head>
 <body>
 
-<a class="skip" href="#main">Skip to the record</a>
+<a class="skip" href="#main">Skip to the workspace</a>
 
 <header class="masthead" role="banner">
-  <div class="mast-left">
-    <span class="wordmark">ValKit</span>
-    <span class="version" id="mast-version">ValKit</span>
-    <p class="avail" id="mast-avail" hidden></p>
-  </div>
+  <div class="mast-inner">
+    <a class="brand" href="#/" aria-label="ValKit validations">
+      <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span>
+        <span class="wordmark">ValKit</span>
+        <span class="brand-subtitle">AI validation workspace</span>
+      </span>
+    </a>
 
-  <div class="mast-right">
-    <div class="identity" id="identity">
-      <div class="identity-row">
-        <label for="actor-input">Acting as</label>
-        <input id="actor-input" type="text" spellcheck="false" autocomplete="off"
-               autocapitalize="off" size="16" aria-describedby="actor-note">
-        <button type="button" id="actor-clear" class="linkish">Clear identity</button>
+    <div class="mast-actions">
+      <div class="identity" id="identity">
+        <div class="identity-row">
+          <label for="actor-input">Record actions as</label>
+          <input id="actor-input" type="text" spellcheck="false" autocomplete="off"
+                 autocapitalize="off" size="16" aria-describedby="actor-note">
+          <button type="button" id="actor-clear" class="linkish">Clear identity</button>
+        </div>
+        <p class="note" id="actor-note"></p>
       </div>
-      <p class="note" id="actor-note"></p>
-    </div>
 
-    <div class="theme" role="group" aria-label="Theme">
-      <button type="button" data-theme="light" aria-pressed="false">Light</button>
-      <button type="button" data-theme="system" aria-pressed="true">System</button>
-      <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+      <div class="theme" role="group" aria-label="Theme">
+        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme="system" aria-pressed="true">System</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+      </div>
     </div>
   </div>
+  <p class="avail" id="mast-avail" hidden></p>
 </header>
 
 <nav class="mainnav" aria-label="Console">
-  <ul>
-    <li><a href="#/">Record index</a></li>
-    <li><a href="#/audit">Audit trail</a></li>
-    <li><a href="#/evidence">Evidence vault</a></li>
-    <li><a href="#/spec">Specification and run</a></li>
-  </ul>
+  <div class="nav-inner">
+    <ul>
+      <li><a href="#/">Validations</a></li>
+      <li><a href="#/spec">Create validation</a></li>
+      <li class="nav-separator" aria-hidden="true"></li>
+      <li><a href="#/audit">Audit trail</a></li>
+      <li><a href="#/evidence">Evidence</a></li>
+    </ul>
+    <p class="nav-context">Evidence, approvals, and traceability</p>
+  </div>
 </nav>
 
 <section class="integrity" id="integrity-bar" aria-labelledby="integrity-h">

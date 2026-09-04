@@ -38,16 +38,10 @@ export const COPY = {
 
   // -- identity ----------------------------------------------------------
   ID_UNSET:
-    'Not set. Set who you are acting as before writing anything. It is recorded in the ' +
-    'audit trail against everything you do here. This is attribution, not authentication ' +
-    '— a deployment puts an identity provider in front of the API and populates this ' +
-    'from the authenticated session. Signing is the exception: a signature is verified ' +
-    'against the identity store’s components regardless of this header, so a forged ' +
-    'header cannot produce a signature.',
+    'Required before you create a record or approve a document. This identifies the actor in ' +
+    'the audit trail; it is not authentication.',
   ID_SET: (at) =>
-    `Set in this browser tab at ${at} (UTC). Recorded in the audit trail against everything ` +
-    'you do here, and used as the identification code the signature is claimed for. This is ' +
-    'attribution, not authentication.',
+    `Actions in this tab are attributed to this identity from ${at} (UTC).`,
 
   // -- integrity ---------------------------------------------------------
   INT_CHAIN: (n) =>
