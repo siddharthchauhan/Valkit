@@ -85,6 +85,7 @@ function validationRow(record) {
   const blockers = record.readiness.blockers.length;
   const conditions = record.readiness.conditions.length;
   const run = record.run;
+  const approvals = approvalState(record.documents);
   const status = ready ? 'ready' : run ? 'hold' : 'draft';
   const evidence = !run
     ? COPY.HOME_EVIDENCE_PENDING
@@ -113,7 +114,9 @@ function validationRow(record) {
     ]),
     el('dl', { class: 'validation-facts' }, [
       ...fact('Documents', String(record.documents.length)),
-      ...fact('Approvals', ready ? 'complete' : COPY.HOME_APPROVALS(blockers)),
+      ...fact('Approvals', approvals.pending
+        ? 'not available'
+        : approvals.complete ? 'complete' : COPY.HOME_APPROVALS(approvals.outstanding)),
       ...fact('Ongoing', conditions ? COPY.HOME_CONDITIONS(conditions) : 'none'),
     ]),
     el('a', {
@@ -122,6 +125,15 @@ function validationRow(record) {
       text: COPY.HOME_OPEN,
     }),
   ]);
+}
+
+function approvalState(documents) {
+  const outstanding = documents.filter((doc) => !doc.signatures_required_met).length;
+  return {
+    pending: documents.length === 0,
+    complete: documents.length > 0 && outstanding === 0,
+    outstanding,
+  };
 }
 
 function fact(term, value) {

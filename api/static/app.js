@@ -185,7 +185,7 @@ function renderSubnav(path, query = {}) {
   for (const [suffix, name] of SUBNAV) {
     const href = `#/v/${id}${suffix}`;
     const current = path === `/v/${id}${suffix}`;
-    const disabled = name === 'Sign' && !signable;
+    const disabled = suffix === '/sign' && !signable;
     list.append(el('li', {}, [el('a', {
       href,
       text: name,

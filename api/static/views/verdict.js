@@ -173,6 +173,7 @@ function validationHero(record, action) {
   const readiness = record.readiness;
   const run = record.run;
   const ready = readiness.ready;
+  const approvals = approvalState(record.documents);
   const headline = ready
     ? COPY.OVERVIEW_READY_H
     : run ? COPY.OVERVIEW_HOLD_H : COPY.OVERVIEW_NOT_RUN_H;
@@ -210,8 +211,11 @@ function validationHero(record, action) {
         ...fact(COPY.OVERVIEW_DOCUMENTS, record.documents.length
           ? COPY.OVERVIEW_DOCUMENTS_READY(record.documents.length)
           : COPY.OVERVIEW_DOCUMENTS_PENDING),
-        ...fact(COPY.OVERVIEW_APPROVALS, ready
-          ? COPY.OVERVIEW_APPROVALS_READY : COPY.OVERVIEW_APPROVALS_HOLD),
+        ...fact(COPY.OVERVIEW_APPROVALS, approvals.pending
+          ? COPY.OVERVIEW_DOCUMENTS_PENDING
+          : approvals.complete
+            ? COPY.OVERVIEW_APPROVALS_READY
+            : COPY.OVERVIEW_APPROVALS_HOLD(approvals.outstanding)),
       ]),
       el('p', {
         class: 'note',
@@ -225,9 +229,9 @@ function validationHero(record, action) {
 
 function lifecycleRail(record, validationId) {
   const ready = record.readiness.ready;
-  const blockers = record.readiness.blockers.length;
   const run = record.run;
   const docs = record.documents.length;
+  const approvals = approvalState(record.documents);
   const stages = [
     ['complete', COPY.OVERVIEW_STAGES[0], 'Specification and controls recorded.', `#/v/${encodeURIComponent(validationId)}/chain`],
     [run ? 'complete' : 'waiting', COPY.OVERVIEW_STAGES[1], run
@@ -236,8 +240,9 @@ function lifecycleRail(record, validationId) {
     [docs ? 'complete' : 'waiting', COPY.OVERVIEW_STAGES[2], docs
       ? COPY.OVERVIEW_DOCUMENTS_READY(docs) : COPY.OVERVIEW_DOCUMENTS_PENDING,
     `#/v/${encodeURIComponent(validationId)}/package`],
-    [ready ? 'complete' : blockers ? 'attention' : 'waiting', COPY.OVERVIEW_STAGES[3], ready
-      ? COPY.OVERVIEW_APPROVALS_READY : COPY.OVERVIEW_APPROVALS_HOLD,
+    [approvals.complete ? 'complete' : approvals.pending ? 'waiting' : 'attention', COPY.OVERVIEW_STAGES[3], approvals.pending
+      ? COPY.OVERVIEW_DOCUMENTS_PENDING
+      : approvals.complete ? COPY.OVERVIEW_APPROVALS_READY : COPY.OVERVIEW_APPROVALS_HOLD(approvals.outstanding),
     `#/v/${encodeURIComponent(validationId)}/sign`],
     [ready ? 'current' : 'waiting', COPY.OVERVIEW_STAGES[4], ready
       ? COPY.OVERVIEW_MONITORING_READY : COPY.OVERVIEW_MONITORING_PENDING,
@@ -304,6 +309,15 @@ function nextAction(record, validationId, remedies) {
 
 function fact(term, value) {
   return [el('dt', { text: term }), el('dd', { text: value })];
+}
+
+function approvalState(documents) {
+  const outstanding = documents.filter((doc) => !doc.signatures_required_met).length;
+  return {
+    pending: documents.length === 0,
+    complete: documents.length > 0 && outstanding === 0,
+    outstanding,
+  };
 }
 
 async function attachCoverageNote(container, validationId) {

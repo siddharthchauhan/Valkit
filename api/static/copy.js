@@ -125,7 +125,8 @@ export const COPY = {
   HOME_EVIDENCE_MET: 'Evidence supports targets',
   HOME_EVIDENCE_NOT_MET: 'Evidence does not support all targets',
   HOME_EVIDENCE_PENDING: 'Qualification has not run',
-  HOME_APPROVALS: (count) => `${count} ${count === 1 ? 'approval' : 'approvals'} need review`,
+  HOME_APPROVALS: (count) =>
+    `${count} ${count === 1 ? 'document still needs' : 'documents still need'} required approval.`,
   HOME_CONDITIONS: (count) => `${count} ongoing ${count === 1 ? 'requirement' : 'requirements'}`,
   HOME_READY_SUMMARY: 'Readiness conditions are met. Continue with monitoring and change control.',
   HOME_HOLD_SUMMARY: (count) =>
@@ -193,8 +194,9 @@ export const COPY = {
     `${count} ${count === 1 ? 'document is' : 'documents are'} ready for review.`,
   OVERVIEW_DOCUMENTS_PENDING: 'Documents are not available until qualification completes.',
   OVERVIEW_APPROVALS: 'Human approval',
-  OVERVIEW_APPROVALS_READY: 'Recorded approvals are complete.',
-  OVERVIEW_APPROVALS_HOLD: 'Review and approval are still required.',
+  OVERVIEW_APPROVALS_READY: 'All required document approvals are complete.',
+  OVERVIEW_APPROVALS_HOLD: (count) =>
+    `${count} ${count === 1 ? 'document still needs' : 'documents still need'} required approval.`,
   OVERVIEW_MONITORING: 'Monitoring',
   OVERVIEW_MONITORING_READY: 'Monitoring is the next lifecycle activity.',
   OVERVIEW_MONITORING_PENDING: 'Monitoring begins once readiness is complete.',

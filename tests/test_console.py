@@ -264,6 +264,33 @@ class TestAccessibility:
                 assert glyph not in source, f"{path.name} uses {glyph}"
 
 
+class TestWorkspaceShellContracts:
+    def test_the_ready_check_has_a_visible_version_target(self):
+        """The asynchronous health check must not dereference a removed header node."""
+        html = (STATIC / "index.html").read_text()
+        app = (STATIC / "app.js").read_text()
+        assert 'id="mast-version"' in html
+        assert "document.getElementById('mast-version')" in app
+
+    def test_the_example_survives_the_identity_gate(self):
+        """A first-time user who chooses the example should see that example after attribution."""
+        source = (STATIC / "views" / "spec.js").read_text()
+        assert "root.append(identityGate(loadExample));" in source
+        assert "location.hash = loadExample ? '#/spec?setup=1&example=1' : '#/spec?setup=1';" in source
+
+    def test_the_approvals_tab_uses_its_route_not_its_display_name(self):
+        """Changing the visible label must not silently remove the signing interlock."""
+        source = (STATIC / "app.js").read_text()
+        assert "const disabled = suffix === '/sign' && !signable;" in source
+
+    def test_approval_status_comes_from_document_summaries(self):
+        """A failed metric must not be misreported as an outstanding document approval."""
+        for path in (STATIC / "views" / "index.js", STATIC / "views" / "verdict.js"):
+            source = path.read_text()
+            assert "doc.signatures_required_met" in source
+            assert "function approvalState(documents)" in source
+
+
 class TestServerProse:
     def test_prose_is_never_injected_as_markup(self):
         """A specification, a requirement or an error body reaching the page

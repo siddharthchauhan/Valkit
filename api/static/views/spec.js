@@ -17,7 +17,7 @@ export async function renderSpec({ loadExample = false } = {}) {
   const who = identity.value();
 
   if (!who) {
-    root.append(identityGate());
+    root.append(identityGate(loadExample));
     return root;
   }
 
@@ -116,7 +116,7 @@ function launchHero() {
   ]);
 }
 
-function identityGate() {
+function identityGate(loadExample) {
   return el('section', { class: 'identity-gate', 'data-needs-identity': 'true' }, [
     el('p', { class: 'eyebrow', text: COPY.LAUNCH_IDENTITY_EYEBROW }),
     el('h1', { text: COPY.LAUNCH_IDENTITY_H }),
@@ -131,7 +131,7 @@ function identityGate() {
           document.getElementById('actor-input')?.focus();
           return;
         }
-        location.hash = '#/spec?setup=1';
+        location.hash = loadExample ? '#/spec?setup=1&example=1' : '#/spec?setup=1';
       },
     }),
   ]);
