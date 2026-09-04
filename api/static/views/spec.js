@@ -1,50 +1,51 @@
-/* Specification and run — the only authoring screen.
+/* The guided validation launch.
  *
- * It writes to the audit trail, so it says up front that it needs an identity.
- * Running the battery generates the package and stops short of signing: a
- * pipeline that signed on the author's behalf would defeat the purpose of
- * requiring a signature, and the console does not paper over that.
+ * valkit.yaml remains the source of truth, but it now sits in a workflow that
+ * explains what the file controls and what will happen when a qualification is
+ * run. The screen still performs exactly the same two append-only writes.
  */
 
 import { api, invalidate } from '../api.js';
 import { COPY } from '../copy.js';
-import { consoleNote, dataRegion, defs, digest, el, errorBlock, proseList, section } from '../dom.js';
+import {
+  announce, consoleNote, dataRegion, defs, digest, el, errorBlock, proseList,
+} from '../dom.js';
 import { afterWrite, identity } from '../session.js';
 
-export async function renderSpec() {
-  const root = el('div', {}, [
-    el('h1', { class: 'screen-title', text: COPY.SPEC_H }),
-    el('p', { class: 'lede', text: COPY.SPEC_LEDE }),
-  ]);
-
+export async function renderSpec({ loadExample = false } = {}) {
+  const root = el('div', { class: 'launch-workspace' });
   const who = identity.value();
+
   if (!who) {
-    root.append(el('p', { class: 'note', text: COPY.SPEC_NEEDS_IDENTITY }));
+    root.append(identityGate());
     return root;
   }
 
   const editor = el('textarea', { id: 'spec-yaml', spellcheck: 'false' });
-  const outcome = el('div');
-  const runHost = el('div');
+  const outcome = el('div', { class: 'launch-outcome' });
+  const runHost = el('div', { class: 'launch-run-result' });
 
-  const loadExample = el('button', {
+  const useExample = el('button', {
     type: 'button',
-    text: 'Load the example',
+    text: COPY.LAUNCH_USE_EXAMPLE,
     onclick: async () => {
       try {
         editor.value = await api.exampleSpec();
+        announce('The example validation source is ready to review.');
       } catch (err) {
         outcome.replaceChildren(errorBlock(err));
       }
     },
   });
 
-  const ingest = el('button', {
+  const createPlan = el('button', {
     type: 'button',
     class: 'primary',
-    text: 'Ingest specification',
+    text: COPY.LAUNCH_CREATE_PLAN,
     onclick: async () => {
-      outcome.replaceChildren(el('p', { class: 'pending', role: 'status', text: 'Ingesting.' }));
+      outcome.replaceChildren(el('p', {
+        class: 'pending', role: 'status', text: 'Creating the validation plan…',
+      }));
       try {
         const summary = await api.ingestSpec(editor.value, who);
         outcome.replaceChildren(summaryBlock(summary, who, runHost));
@@ -55,41 +56,98 @@ export async function renderSpec() {
     },
   });
 
-  root.append(section('Specification',
-    el('div', { class: 'field' }, [
-      el('label', { for: 'spec-yaml', text: 'valkit.yaml' }),
-      editor,
+  root.append(launchHero(), el('div', { class: 'launch-layout' }, [
+    el('section', { class: 'launch-source' }, [
+      el('p', { class: 'eyebrow', text: COPY.LAUNCH_SOURCE_EYEBROW }),
+      el('h2', { text: COPY.LAUNCH_SOURCE_H }),
+      el('p', { class: 'section-lede', text: COPY.LAUNCH_SOURCE_LEDE }),
+      el('div', { class: 'field' }, [
+        el('label', { for: 'spec-yaml', text: 'valkit.yaml' }),
+        editor,
+      ]),
+      el('div', { class: 'form-row launch-actions' }, [useExample, createPlan]),
+      outcome,
     ]),
-    el('div', { class: 'form-row' }, [loadExample, ingest]),
-    outcome,
-  ));
-  root.append(section('Run', runHost));
+    el('aside', { class: 'launch-next', 'aria-label': COPY.LAUNCH_NEXT_EYEBROW }, [
+      el('p', { class: 'eyebrow', text: COPY.LAUNCH_NEXT_EYEBROW }),
+      el('ol', { class: 'next-steps' }, COPY.LAUNCH_NEXT.map(([heading, body], index) =>
+        el('li', {}, [
+          el('span', { class: 'next-index', text: `0${index + 1}` }),
+          el('div', {}, [el('h3', { text: heading }), el('p', { text: body })]),
+        ]))),
+      el('p', { class: 'note', text: COPY.LAUNCH_RUN_NOTE }),
+    ]),
+  ]), runHost);
 
   const existing = el('div');
-  root.append(section('Already ingested', existing));
+  root.append(el('section', { class: 'ready-plans' }, [
+    el('div', { class: 'section-heading' }, [
+      el('div', {}, [
+        el('p', { class: 'eyebrow', text: 'Existing plans' }),
+        el('h2', { text: COPY.LAUNCH_READY_H }),
+      ]),
+    ]),
+    existing,
+  ]));
+
   await dataRegion(existing, async () => {
     const refs = await api.listSpecs();
-    if (!refs.length) return el('p', { class: 'note', text: COPY.IDX_SPEC_EMPTY });
-    const list = el('div', { class: 'cards' });
-    for (const ref of refs) list.append(el('div', { class: 'card' }, [
-      el('h3', { class: 'id', text: ref }),
-      el('p', {}, [runButton(ref, who, runHost)]),
-    ]));
-    return list;
-  }, { noun: 'the specifications' });
+    if (!refs.length) return el('p', { class: 'note', text: COPY.LAUNCH_READY_EMPTY });
+    return el('div', { class: 'plan-list' }, refs.map((ref) => planRow(ref, who, runHost)));
+  }, { noun: 'the validation plans' });
+
+  if (loadExample) {
+    try {
+      editor.value = await api.exampleSpec();
+      announce('The example validation source is ready to review.');
+    } catch (err) {
+      outcome.replaceChildren(errorBlock(err));
+    }
+  }
 
   return root;
 }
 
+function launchHero() {
+  return el('section', { class: 'launch-hero' }, [
+    el('p', { class: 'eyebrow', text: COPY.LAUNCH_EYEBROW }),
+    el('h1', { text: COPY.LAUNCH_H }),
+    el('p', { class: 'hero-lede', text: COPY.LAUNCH_LEDE }),
+  ]);
+}
+
+function identityGate() {
+  return el('section', { class: 'identity-gate', 'data-needs-identity': 'true' }, [
+    el('p', { class: 'eyebrow', text: COPY.LAUNCH_IDENTITY_EYEBROW }),
+    el('h1', { text: COPY.LAUNCH_IDENTITY_H }),
+    el('p', { class: 'hero-lede', text: COPY.LAUNCH_IDENTITY_LEDE }),
+    el('button', {
+      type: 'button',
+      class: 'primary',
+      text: COPY.LAUNCH_IDENTITY_ACTION,
+      onclick: () => {
+        if (!identity.value()) {
+          announce(COPY.LAUNCH_IDENTITY_MISSING);
+          document.getElementById('actor-input')?.focus();
+          return;
+        }
+        location.hash = '#/spec?setup=1';
+      },
+    }),
+  ]);
+}
+
 function summaryBlock(summary, who, runHost) {
-  const wrap = el('div');
+  const wrap = el('section', { class: 'preflight-panel' }, [
+    el('p', { class: 'eyebrow', text: COPY.LAUNCH_PLAN_EYEBROW }),
+    el('h3', { text: `${summary.agent_id} v${summary.version}` }),
+  ]);
   wrap.append(defs([
-    ['Agent', `${summary.agent_id} v${summary.version}`],
     ['GAMP category', `Category ${summary.gamp_category}`],
     ['Risk class', summary.risk_class],
-    ['Requirements', String(summary.requirements)],
-    ['Risks', String(summary.risks)],
-    ['Test cases', String(summary.tests)],
+    ['Requirements derived', String(summary.requirements)],
+    ['Risks assessed', String(summary.risks)],
+    ['Qualification tests', String(summary.tests)],
     ['Specification digest', digest(summary.spec_sha256)],
   ]));
 
@@ -104,40 +162,50 @@ function summaryBlock(summary, who, runHost) {
     token: 'ADV',
     emptyCopy: 'None.',
   }));
-
-  wrap.append(el('p', {}, [runButton(summary.ref, who, runHost)]));
+  wrap.append(el('div', { class: 'preflight-actions' }, [runButton(summary.ref, who, runHost)]));
   return wrap;
+}
+
+function planRow(specRef, who, runHost) {
+  return el('article', { class: 'plan-row' }, [
+    el('div', {}, [
+      el('p', { class: 'id', text: specRef }),
+      el('p', { class: 'note', text: 'A validation source is ready for qualification.' }),
+    ]),
+    runButton(specRef, who, runHost),
+  ]);
 }
 
 function runButton(specRef, who, runHost) {
   return el('button', {
     type: 'button',
-    text: `Run the battery for ${specRef}`,
+    class: 'primary',
+    text: COPY.LAUNCH_RUN,
     onclick: async (event) => {
       event.target.disabled = true;
-      event.target.textContent = 'Running the battery.';
-      runHost.replaceChildren(el('p', { class: 'pending', role: 'status', text: 'Running.' }));
+      event.target.textContent = COPY.LAUNCH_RUNNING;
+      runHost.replaceChildren(el('p', {
+        class: 'pending', role: 'status', text: COPY.LAUNCH_RUNNING,
+      }));
       try {
         const validation = await api.startValidation(specRef, who);
         invalidate('validation:');
-        runHost.replaceChildren(el('div', {}, [
-          el('p', { class: 'note', text: COPY.SPEC_RUN_NOTE }),
-          el('p', {}, [
-            'Opened ',
-            el('a', {
-              href: `#/v/${encodeURIComponent(validation.validation_id)}`,
-              text: validation.validation_id,
-            }),
-            ` — ${validation.readiness.ready ? 'validated' : 'in validation'}, ` +
-            `${validation.documents.length} documents generated.`,
-          ]),
+        runHost.replaceChildren(el('section', { class: 'run-complete' }, [
+          el('p', { class: 'eyebrow', text: COPY.LAUNCH_RESULT_EYEBROW }),
+          el('h2', { text: COPY.LAUNCH_RESULT_H }),
+          el('p', { class: 'section-lede', text: COPY.LAUNCH_RESULT_LEDE(validation.documents.length) }),
+          el('a', {
+            class: 'button-link primary-link',
+            href: `#/v/${encodeURIComponent(validation.validation_id)}`,
+            text: COPY.HOME_OPEN,
+          }),
         ]));
         await afterWrite();
       } catch (err) {
         runHost.replaceChildren(errorBlock(err));
       } finally {
         event.target.disabled = false;
-        event.target.textContent = `Run the battery for ${specRef}`;
+        event.target.textContent = COPY.LAUNCH_RUN;
       }
     },
   });

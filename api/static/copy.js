@@ -40,8 +40,7 @@ export const COPY = {
   ID_UNSET:
     'Required before you create a record or approve a document. This identifies the actor in ' +
     'the audit trail; it is not authentication.',
-  ID_SET: (at) =>
-    `Actions in this tab are attributed to this identity from ${at} (UTC).`,
+  ID_SET: () => 'Actions in this tab are attributed to this identity.',
 
   // -- integrity ---------------------------------------------------------
   INT_CHAIN: (n) =>
@@ -89,6 +88,87 @@ export const COPY = {
     'audit trail and the evidence vault do, and are listed in the navigation above.',
   IDX_SPEC_H: 'Specifications ingested',
   IDX_SPEC_EMPTY: 'None. Nothing has been ingested in this instance.',
+
+  // -- validation workspace ---------------------------------------------
+  HOME_EYEBROW: 'Validation workspace',
+  HOME_H: 'Evidence for AI used in regulated work.',
+  HOME_LEDE:
+    'Define an AI agent’s intended use, test it against controlled data, and prepare the ' +
+    'evidence, traceability, and documents a quality team can review and approve.',
+  HOME_CREATE: 'Create a validation',
+  HOME_EXAMPLE: 'Explore the example',
+  HOME_NOTE:
+    'ValKit assembles the evidence. A qualified person still defines the use, reviews the ' +
+    'record, and takes responsibility for approval.',
+  HOME_JOURNEY: 'The evidence lifecycle',
+  HOME_STAGES: [
+    ['01', 'Define the claim', 'State the agent’s intended use, limits, risks, and acceptance targets.'],
+    ['02', 'Run qualification', 'Evaluate against a pinned dataset and preserve the evidence.'],
+    ['03', 'Review and maintain', 'Review traceability and documents, collect human approval, then monitor change.'],
+  ],
+  HOME_VALIDATIONS_H: 'Your validations',
+  HOME_VALIDATIONS_LEDE:
+    'Each validation is a connected record: scope, evidence, readiness, documents, and approval.',
+  HOME_EMPTY_EYEBROW: 'Start here',
+  HOME_EMPTY_H: 'Create the first validation plan.',
+  HOME_EMPTY_LEDE:
+    'Start from the example or bring your own valkit.yaml. The plan becomes the source of ' +
+    'truth for the risk assessment, requirements, and qualification tests.',
+  HOME_EMPTY_ACTION: 'Create a validation plan',
+  HOME_EMPTY_NOTE:
+    'Creating a plan writes an attributed audit record. Set the identity in the header when ' +
+    'you are ready to begin.',
+  HOME_OPEN: 'Open workspace',
+  HOME_STATUS_READY: 'Validated',
+  HOME_STATUS_HOLD: 'Needs attention',
+  HOME_STATUS_DRAFT: 'Qualification pending',
+  HOME_EVIDENCE_MET: 'Evidence supports targets',
+  HOME_EVIDENCE_NOT_MET: 'Evidence does not support all targets',
+  HOME_EVIDENCE_PENDING: 'Qualification has not run',
+  HOME_APPROVALS: (count) => `${count} ${count === 1 ? 'approval' : 'approvals'} need review`,
+  HOME_CONDITIONS: (count) => `${count} ongoing ${count === 1 ? 'requirement' : 'requirements'}`,
+  HOME_READY_SUMMARY: 'Readiness conditions are met. Continue with monitoring and change control.',
+  HOME_HOLD_SUMMARY: (count) =>
+    `${count} readiness ${count === 1 ? 'item needs' : 'items need'} attention before validation can be completed.`,
+
+  // -- validation launch -------------------------------------------------
+  LAUNCH_EYEBROW: 'New validation',
+  LAUNCH_H: 'Turn an AI evaluation into a reviewable evidence package.',
+  LAUNCH_LEDE:
+    'ValKit derives the risk assessment, requirements, and qualification tests from one ' +
+    'validation source. Run the qualification only after that plan looks right to you.',
+  LAUNCH_SOURCE_EYEBROW: '01 · Validation source',
+  LAUNCH_SOURCE_H: 'Describe the agent and the claim you want to support.',
+  LAUNCH_SOURCE_LEDE:
+    'Paste a valkit.yaml or start with the offline example. This file is the source of truth ' +
+    'for the context of use, risks, datasets, targets, and sign-off roles.',
+  LAUNCH_USE_EXAMPLE: 'Use the example',
+  LAUNCH_CREATE_PLAN: 'Create validation plan',
+  LAUNCH_PLAN_EYEBROW: 'Plan ready to qualify',
+  LAUNCH_RUN: 'Run qualification',
+  LAUNCH_RUNNING: 'Running qualification…',
+  LAUNCH_RUN_NOTE:
+    'This runs the defined qualification, stores the evidence, and generates review documents. ' +
+    'It never approves or signs on a person’s behalf.',
+  LAUNCH_NEXT_EYEBROW: 'What happens next',
+  LAUNCH_NEXT: [
+    ['Review the plan', 'Check the derived risk class, requirements, and tests before running.'],
+    ['Run qualification', 'ValKit evaluates the agent and produces controlled evidence.'],
+    ['Review evidence', 'Inspect results, traceability, documents, and approval needs.'],
+  ],
+  LAUNCH_READY_H: 'Plans ready to qualify',
+  LAUNCH_READY_EMPTY: 'No validation plan has been created in this instance yet.',
+  LAUNCH_RESULT_EYEBROW: 'Qualification complete',
+  LAUNCH_RESULT_H: 'Evidence and review documents are ready.',
+  LAUNCH_RESULT_LEDE: (count) =>
+    `${count} ${count === 1 ? 'document was' : 'documents were'} generated. Human approval remains a separate, deliberate step.`,
+  LAUNCH_IDENTITY_EYEBROW: 'Before you begin',
+  LAUNCH_IDENTITY_H: 'Name the person acting on this validation.',
+  LAUNCH_IDENTITY_LEDE:
+    'ValKit needs an audit identity before it can create a plan. Set it in the header. That ' +
+    'identity attributes actions in the audit trail; it does not authenticate a person.',
+  LAUNCH_IDENTITY_ACTION: 'Continue to validation setup',
+  LAUNCH_IDENTITY_MISSING: 'Set an audit identity in the header before continuing.',
 
   // -- the gate ----------------------------------------------------------
   GATE_HOLD: 'In validation',
