@@ -173,6 +173,40 @@ export const COPY = {
   // -- the gate ----------------------------------------------------------
   GATE_HOLD: 'In validation',
   GATE_READY: 'Validated',
+  OVERVIEW_EYEBROW: 'Validation overview',
+  OVERVIEW_READY_H: 'Validated and ready for monitoring.',
+  OVERVIEW_HOLD_H: 'Qualification is complete. Review is still required.',
+  OVERVIEW_NOT_RUN_H: 'Qualification has not run yet.',
+  OVERVIEW_READY_LEDE:
+    'Every recorded readiness condition is met. Continue with monitoring and change control.',
+  OVERVIEW_HOLD_LEDE: (count) =>
+    `${count} readiness ${count === 1 ? 'item needs' : 'items need'} attention before this validation can be completed.`,
+  OVERVIEW_NOT_RUN_LEDE:
+    'Complete the qualification run before ValKit can assemble the evidence for review.',
+  OVERVIEW_READINESS: 'Readiness',
+  OVERVIEW_NEXT: 'Next action',
+  OVERVIEW_EVIDENCE: 'Qualification evidence',
+  OVERVIEW_EVIDENCE_COMPLETE: 'The qualification run completed.',
+  OVERVIEW_EVIDENCE_PENDING: 'No qualification run is attached.',
+  OVERVIEW_DOCUMENTS: 'Validation documents',
+  OVERVIEW_DOCUMENTS_READY: (count) =>
+    `${count} ${count === 1 ? 'document is' : 'documents are'} ready for review.`,
+  OVERVIEW_DOCUMENTS_PENDING: 'Documents are not available until qualification completes.',
+  OVERVIEW_APPROVALS: 'Human approval',
+  OVERVIEW_APPROVALS_READY: 'Recorded approvals are complete.',
+  OVERVIEW_APPROVALS_HOLD: 'Review and approval are still required.',
+  OVERVIEW_MONITORING: 'Monitoring',
+  OVERVIEW_MONITORING_READY: 'Monitoring is the next lifecycle activity.',
+  OVERVIEW_MONITORING_PENDING: 'Monitoring begins once readiness is complete.',
+  OVERVIEW_LIFECYCLE: 'Lifecycle',
+  OVERVIEW_STAGES: ['Plan', 'Qualification', 'Evidence', 'Approvals', 'Monitoring'],
+  OVERVIEW_EVIDENCE_H: 'Evidence at a glance',
+  OVERVIEW_EVIDENCE_LEDE:
+    'The lower confidence bound is the claim. Compare it with the target before deciding whether the evidence supports the intended use.',
+  OVERVIEW_VIEW_RESULTS: 'View results',
+  OVERVIEW_VIEW_TRACEABILITY: 'View traceability',
+  OVERVIEW_VIEW_DOCUMENTS: 'View documents',
+  OVERVIEW_VIEW_MONITORING: 'Open monitoring',
   GATE_SUMMARY_HOLD: (b, s, c) =>
     `Not yet validated. ${b} condition${b === 1 ? '' : 's'} of the validated gate ` +
     `do${b === 1 ? 'es' : ''} not hold. ${s} hold. ` +
@@ -195,18 +229,17 @@ export const COPY = {
   GATE_LIFECYCLE_SET: (status, at) =>
     `Lifecycle status on the record: ${status}, validated ${at} (UTC).`,
 
-  BLOCKERS_H: 'Not yet validated because',
+  BLOCKERS_H: 'Needs attention',
   BLOCKERS_INTRO:
-    'Each of these is a condition of the validated gate that does not hold. Any one of them ' +
-    'is enough to withhold validated status.',
-  CONDITIONS_H: 'Outstanding conditions',
+    'These are the recorded conditions that currently prevent completion. Each is shown ' +
+    'verbatim from the validation record.',
+  CONDITIONS_H: 'Ongoing requirements',
   CONDITIONS_INTRO:
-    'These do not block the qualification evidence. Validated status depends on completing ' +
-    'them, and they are carried into the validation summary report.',
-  SATISFIED_H: 'Satisfied',
+    'These controls are completed during live operation. They do not weaken the qualification ' +
+    'evidence, but remain part of the validation record.',
+  SATISFIED_H: 'Evidence already in place',
   SATISFIED_INTRO:
-    'Each of these is a condition of the validated gate that holds. This is the evidence a ' +
-    'signature would rely on.',
+    'These recorded conditions already hold. This is the evidence a qualified reviewer can inspect.',
   NONE: 'None.',
 
   GATE_COVERAGE_NOTE: (n, ids) =>
@@ -229,7 +262,7 @@ export const COPY = {
     'No remedy is available from this console; this is a deployment configuration.',
 
   // -- acceptance --------------------------------------------------------
-  ACC_H: 'Acceptance',
+  ACC_H: 'Results and acceptance',
   ACC_LEDE:
     'The lower bound is the claim. The observed rate describes this sample; the bound is the ' +
     'value the true rate exceeds with the stated confidence, and it is what the signed report ' +
@@ -265,7 +298,7 @@ export const COPY = {
   CHAIN_EMPTY: 'None. This validation has no traceability matrix.',
 
   // -- package -----------------------------------------------------------
-  PKG_H: 'Package',
+  PKG_H: 'Validation documents',
   PKG_LEDE:
     'The documents generated from this record, and their approvals. A document is a draft ' +
     'until the approvals its specification requires are applied; nothing here can be edited.',
@@ -275,7 +308,7 @@ export const COPY = {
     'It is excluded from the signing queue and its approvals cannot be treated as met.',
 
   // -- signing -----------------------------------------------------------
-  SIGN_H: 'Signing queue',
+  SIGN_H: 'Approvals',
   SIGN_LEDE:
     'A signature under 21 CFR Part 11 subpart C. What you apply is an assertion about a ' +
     'specific document, bound to the digest of the exact bytes shown on its record screen.',

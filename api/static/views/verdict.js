@@ -16,8 +16,8 @@
 
 import { api, cached } from '../api.js';
 import { COPY } from '../copy.js';
-import { consoleNote, dataRegion, defs, digest, el, proseList, section, widthFor } from '../dom.js';
-import { label, plural } from '../fmt.js';
+import { consoleNote, dataRegion, defs, digest, el, proseList, section, tok, widthFor } from '../dom.js';
+import { label, proportion } from '../fmt.js';
 
 const REMEDIES = [
   [/^\d+ document\(s\) lack the required approvals/, (id, m) => ({
@@ -72,46 +72,43 @@ function body(record, validationId) {
   const readiness = record.readiness;
   const ready = readiness.ready;
   const run = record.run;
-  const wrap = el('div');
+  const wrap = el('div', { class: 'validation-workspace' });
+  const remedies = remedyFor(record, validationId);
+  const action = nextAction(record, validationId, remedies);
 
-  wrap.append(el('h1', { class: 'vh', text: `Validation ${record.validation_id}` }));
+  wrap.append(validationHero(record, action), lifecycleRail(record, validationId));
 
-  const banner = el('section', { class: 'banner', dataset: { state: ready ? 'met' : 'hold' } }, [
-    el('h2', { class: 'banner-h', text: ready ? COPY.GATE_READY : COPY.GATE_HOLD }),
-    el('p', {
-      class: 'line-1',
-      text: `${record.agent_id} v${record.agent_version} · ${record.validation_id} · opened ${record.created_at} (UTC)`,
+  if (run?.metrics?.length) wrap.append(evidenceSnapshot(run, validationId));
+
+  wrap.append(el('nav', { class: 'workspace-links', 'aria-label': 'Validation workspace' }, [
+    el('a', { href: `#/v/${encodeURIComponent(validationId)}/acceptance`, text: COPY.OVERVIEW_VIEW_RESULTS }),
+    el('a', { href: `#/v/${encodeURIComponent(validationId)}/chain`, text: COPY.OVERVIEW_VIEW_TRACEABILITY }),
+    el('a', { href: `#/v/${encodeURIComponent(validationId)}/package`, text: COPY.OVERVIEW_VIEW_DOCUMENTS }),
+    el('a', {
+      href: `#/agent/${encodeURIComponent(record.agent_id)}/monitoring`,
+      text: COPY.OVERVIEW_VIEW_MONITORING,
     }),
-    el('p', {
-      class: 'line-2',
-      text: ready
-        ? COPY.GATE_SUMMARY_READY(readiness.satisfied.length)
-        : COPY.GATE_SUMMARY_HOLD(
-          readiness.blockers.length, readiness.satisfied.length, readiness.conditions.length),
-    }),
-    el('p', { class: 'note', text: COPY.GATE_CONJUNCTIVE }),
+  ]));
+
+  const review = el('section', { class: 'decision-record' }, [
+    el('div', { class: 'section-heading' }, [
+      el('div', {}, [
+        el('p', { class: 'eyebrow', text: 'Readiness record' }),
+        el('h2', { text: 'What the record says' }),
+      ]),
+      el('p', { class: 'section-lede', text: COPY.GATE_CONJUNCTIVE }),
+    ]),
   ]);
-  if (ready && readiness.conditions.length) {
-    banner.append(el('p', { class: 'note', text: COPY.GATE_READY_CONDITIONS(readiness.conditions.length) }));
-  }
-  if (ready) banner.append(el('p', { class: 'note', text: COPY.GATE_READY_LIMIT }));
-  banner.append(el('p', {
-    class: 'note lifecycle',
-    text: record.validated_at
-      ? COPY.GATE_LIFECYCLE_SET(label('ValidationStatus', record.status).text, record.validated_at)
-      : COPY.GATE_LIFECYCLE_NULL(label('ValidationStatus', record.status).text),
-  }));
-  wrap.append(banner);
 
-  wrap.append(proseList({
+  review.append(proseList({
     heading: COPY.BLOCKERS_H,
     intro: COPY.BLOCKERS_INTRO,
     items: readiness.blockers,
     token: 'BLK',
-    remedyFor: remedyFor(record, validationId),
+    remedyFor: remedies,
   }));
 
-  wrap.append(proseList({
+  review.append(proseList({
     heading: COPY.CONDITIONS_H,
     intro: COPY.CONDITIONS_INTRO,
     items: readiness.conditions,
@@ -124,7 +121,8 @@ function body(record, validationId) {
     items: readiness.satisfied,
     token: 'OK',
   });
-  wrap.append(satisfied);
+  review.append(satisfied);
+  wrap.append(review);
 
   // The server's satisfied sentence about coverage is true and incomplete:
   // covered means a test is linked, verified means it ran. Where the RTM shows
@@ -169,6 +167,143 @@ function body(record, validationId) {
   }));
 
   return wrap;
+}
+
+function validationHero(record, action) {
+  const readiness = record.readiness;
+  const run = record.run;
+  const ready = readiness.ready;
+  const headline = ready
+    ? COPY.OVERVIEW_READY_H
+    : run ? COPY.OVERVIEW_HOLD_H : COPY.OVERVIEW_NOT_RUN_H;
+  const summary = ready
+    ? COPY.OVERVIEW_READY_LEDE
+    : run
+      ? COPY.OVERVIEW_HOLD_LEDE(readiness.blockers.length)
+      : COPY.OVERVIEW_NOT_RUN_LEDE;
+  const state = ready ? 'ready' : run ? 'hold' : 'draft';
+
+  return el('section', { class: 'validation-hero', dataset: { state } }, [
+    el('div', { class: 'validation-hero-copy' }, [
+      el('p', { class: 'eyebrow', text: COPY.OVERVIEW_EYEBROW }),
+      el('p', { class: 'validation-ref', text: `${record.validation_id} · opened ${record.created_at} (UTC)` }),
+      el('h1', { text: record.agent_id }),
+      el('p', { class: 'agent-version', text: `Version ${record.agent_version}` }),
+      el('h2', { class: 'validation-headline', text: headline }),
+      el('p', { class: 'hero-lede', text: summary }),
+      el('div', { class: 'hero-actions' }, [
+        action.href
+          ? el('a', { class: 'button-link primary-link', href: action.href, text: action.text })
+          : el('p', { class: 'note', text: action.text }),
+      ]),
+    ]),
+    el('aside', { class: 'readiness-card', 'aria-label': COPY.OVERVIEW_READINESS }, [
+      el('p', { class: 'journey-label', text: COPY.OVERVIEW_READINESS }),
+      el('span', { class: 'status-pill', dataset: { state } }, [
+        tok(ready ? 'OK' : readiness.blockers.length ? 'BLK' : 'ADV'),
+        el('span', { text: ready ? COPY.GATE_READY : COPY.HOME_STATUS_HOLD }),
+      ]),
+      el('dl', { class: 'readiness-facts' }, [
+        ...fact(COPY.OVERVIEW_EVIDENCE, run
+          ? run.passed ? COPY.HOME_EVIDENCE_MET : COPY.HOME_EVIDENCE_NOT_MET
+          : COPY.OVERVIEW_EVIDENCE_PENDING),
+        ...fact(COPY.OVERVIEW_DOCUMENTS, record.documents.length
+          ? COPY.OVERVIEW_DOCUMENTS_READY(record.documents.length)
+          : COPY.OVERVIEW_DOCUMENTS_PENDING),
+        ...fact(COPY.OVERVIEW_APPROVALS, ready
+          ? COPY.OVERVIEW_APPROVALS_READY : COPY.OVERVIEW_APPROVALS_HOLD),
+      ]),
+      el('p', {
+        class: 'note',
+        text: record.validated_at
+          ? COPY.GATE_LIFECYCLE_SET(label('ValidationStatus', record.status).text, record.validated_at)
+          : COPY.GATE_LIFECYCLE_NULL(label('ValidationStatus', record.status).text),
+      }),
+    ]),
+  ]);
+}
+
+function lifecycleRail(record, validationId) {
+  const ready = record.readiness.ready;
+  const blockers = record.readiness.blockers.length;
+  const run = record.run;
+  const docs = record.documents.length;
+  const stages = [
+    ['complete', COPY.OVERVIEW_STAGES[0], 'Specification and controls recorded.', `#/v/${encodeURIComponent(validationId)}/chain`],
+    [run ? 'complete' : 'waiting', COPY.OVERVIEW_STAGES[1], run
+      ? COPY.OVERVIEW_EVIDENCE_COMPLETE : COPY.OVERVIEW_EVIDENCE_PENDING,
+    `#/v/${encodeURIComponent(validationId)}/acceptance`],
+    [docs ? 'complete' : 'waiting', COPY.OVERVIEW_STAGES[2], docs
+      ? COPY.OVERVIEW_DOCUMENTS_READY(docs) : COPY.OVERVIEW_DOCUMENTS_PENDING,
+    `#/v/${encodeURIComponent(validationId)}/package`],
+    [ready ? 'complete' : blockers ? 'attention' : 'waiting', COPY.OVERVIEW_STAGES[3], ready
+      ? COPY.OVERVIEW_APPROVALS_READY : COPY.OVERVIEW_APPROVALS_HOLD,
+    `#/v/${encodeURIComponent(validationId)}/sign`],
+    [ready ? 'current' : 'waiting', COPY.OVERVIEW_STAGES[4], ready
+      ? COPY.OVERVIEW_MONITORING_READY : COPY.OVERVIEW_MONITORING_PENDING,
+    `#/agent/${encodeURIComponent(record.agent_id)}/monitoring`],
+  ];
+
+  return el('section', { class: 'lifecycle-section', 'aria-labelledby': 'lifecycle-heading' }, [
+    el('div', { class: 'section-heading' }, [
+      el('div', {}, [
+        el('p', { class: 'eyebrow', text: COPY.OVERVIEW_LIFECYCLE }),
+        el('h2', { id: 'lifecycle-heading', text: 'Where this validation is now' }),
+      ]),
+    ]),
+    el('ol', { class: 'lifecycle-rail' }, stages.map(([state, labelText, detail, href], index) =>
+      el('li', { dataset: { state } }, [
+        el('span', { class: 'lifecycle-index', text: `0${index + 1}` }),
+        el('div', {}, [
+          el('h3', {}, [el('a', { href, text: labelText })]),
+          el('p', { text: detail }),
+        ]),
+      ]))),
+  ]);
+}
+
+function evidenceSnapshot(run, validationId) {
+  return el('section', { class: 'evidence-snapshot' }, [
+    el('div', { class: 'section-heading' }, [
+      el('div', {}, [
+        el('p', { class: 'eyebrow', text: 'Qualification result' }),
+        el('h2', { text: COPY.OVERVIEW_EVIDENCE_H }),
+      ]),
+      el('a', {
+        class: 'button-link secondary-link',
+        href: `#/v/${encodeURIComponent(validationId)}/acceptance`,
+        text: COPY.OVERVIEW_VIEW_RESULTS,
+      }),
+    ]),
+    el('p', { class: 'section-lede', text: COPY.OVERVIEW_EVIDENCE_LEDE }),
+    el('div', { class: 'metric-glance-list' }, run.metrics.map((metric) =>
+      el('article', { class: 'metric-glance', dataset: { state: metric.passed ? 'met' : 'nmt' } }, [
+        el('div', { class: 'metric-glance-heading' }, [
+          el('h3', { text: metric.name }),
+          tok(metric.passed ? 'MET' : 'NMT'),
+        ]),
+        el('p', { class: 'metric-glance-bound', text: proportion(metric.lower_bound) }),
+        el('p', { class: 'metric-glance-label', text: 'One-sided lower confidence bound' }),
+        el('p', { class: 'metric-glance-target', text: `Target ${proportion(metric.target)}` }),
+      ]))),
+  ]);
+}
+
+function nextAction(record, validationId, remedies) {
+  const blocker = record.readiness.blockers[0];
+  if (blocker) return remedies(blocker);
+  if (record.readiness.ready) {
+    return {
+      href: `#/agent/${encodeURIComponent(record.agent_id)}/monitoring`,
+      text: COPY.OVERVIEW_VIEW_MONITORING,
+    };
+  }
+  if (!record.run) return { href: '#/spec', text: COPY.HOME_CREATE };
+  return { href: `#/v/${encodeURIComponent(validationId)}/acceptance`, text: COPY.OVERVIEW_VIEW_RESULTS };
+}
+
+function fact(term, value) {
+  return [el('dt', { text: term }), el('dd', { text: value })];
 }
 
 async function attachCoverageNote(container, validationId) {
